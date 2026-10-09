@@ -73,6 +73,16 @@ namespace Keystone
             }
         }
 
+#if DEV
+        /// <summary>(For the development build: change between the hand-packed shader and the one built in the Unity editor, and say which is in use.)</summary>
+        public static string OtherShader()
+        {
+            own.Built = !own.Built;
+            own.Again();
+            return (own.Works ? "the lens is now drawn by " + (own.Built ? "the shader built in the Unity editor" : "the hand-packed OpenGL shader") : "no lens: " + own.Why);
+        }
+#endif
+
         /// <summary>Why there is none, in words for the player (nothing if there is one).</summary>
         public static string WhyNot => Best != null ? null : own.Why + (Other == null ? "" : " And " + Other.Name + " cannot do it here either.");
     }
@@ -84,6 +94,18 @@ namespace Keystone
         Shader shader;
         bool tried;
         public string Why = "";
+
+        /// <summary>Use the shader built in the Unity editor even where the hand-packed OpenGL one would do (for comparing the two).</summary>
+        public bool Built;
+
+        /// <summary>Forget the shader in use, so that the next use loads afresh (after Built is changed).</summary>
+        public void Again()
+        {
+            Off();
+            if (blurring != null) UnityEngine.Object.Destroy(blurring);
+            if (finishing != null) UnityEngine.Object.Destroy(finishing);
+            blurring = finishing = null; commands = null; shader = null; tried = false; Why = "";
+        }
 
         public bool Works
         {
@@ -98,14 +120,14 @@ namespace Keystone
         {
             try
             {
-                bool openGL = SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLCore;
-                // (built in the Unity editor for whatever else the game runs on here, if someone has put one beside the base: none ships yet)
+                bool openGL = SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLCore && !Built;
+                // (built in the Unity editor, from the same shader turned into HLSL, for whatever else the game runs on: see tools/unityshaders)
                 string built = Kit.Folder + "lens-" + (Application.platform == RuntimePlatform.WindowsPlayer ? "windows" : Application.platform == RuntimePlatform.LinuxPlayer ? "linux" : "mac") + ".bundle";
                 string path = openGL ? Kit.Folder + "lens.bundle" : built;
                 if (!File.Exists(path))
                 {
                     Why = openGL ? "Keystone's lens shader (GameData/Keystone/PluginData/lens.bundle) is missing."
-                        : "Keystone's lens shader is for OpenGL, and the game is running on " + SystemInfo.graphicsDeviceType + " here.";
+                        : "Keystone's lens shader for " + SystemInfo.graphicsDeviceType + " (GameData/Keystone/PluginData/" + Path.GetFileName(built) + ") is missing.";
                     Kit.Log("Keystone", "no lens of its own: " + Why);
                     return;
                 }
@@ -115,7 +137,7 @@ namespace Keystone
                 bundle.Unload(false);
                 foreach (Shader one in found) if (one != null && one.isSupported) shader = one;
                 if (shader == null) { Why = "This graphics card cannot run Keystone's lens shader."; Kit.Log("Keystone", "no lens of its own: " + Why); return; }
-                Kit.Log("Keystone", "has a lens of its own");
+                Kit.Log("Keystone", "has a lens of its own" + (openGL ? "" : " (built for " + SystemInfo.graphicsDeviceType + ", from " + Path.GetFileName(built) + ")"));
             }
             catch (Exception ex)
             {

@@ -18,7 +18,8 @@ gradient to click or drag on, with the colour's six hex digits to type) and `Hea
 between settings).
 
 The number after `"Keystone"` in the dependency is the least version the mod can do with: `0, 1` for the
-window and the settings, `0, 2` for the lens, `0, 3` for boxes that can be typed in and the gradient.
+window and the settings, `0, 2` for the lens, `0, 3` for boxes that can be typed in and the gradient,
+`0, 4` for the film.
 
 | | |
 | --- | --- |
@@ -32,3 +33,4 @@ window and the settings, `0, 2` for the lens, `0, 3` for boxes that can be typed
 | `Reach.Field / Method / Call<T>` | the game's non-public members, looked up once; missing ones are reported in the log once and come back as nothing, so a mod can go without instead of failing every frame |
 | `Kit.Log(who, text)` | a line in the game's log with the mod's name in front |
 | `Lens.Best`, `Look` | the lens (see [The lens](The-lens.md)): `Lens.Best?.Use(camera, look)` every frame while it is wanted, `Off()` when it is not |
+| `Film.Ask`, `Grade` | the film (see [The film](The-film.md)): `Film.Ask("My mod", grade)` every frame while it is wanted |

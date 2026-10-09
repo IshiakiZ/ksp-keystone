@@ -62,10 +62,22 @@ namespace Keystone
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             DontDestroyOnLoad(gameObject);
+            Camera.onPreCull += BeforeDrawing;
+        }
+
+        int filmed = -1;
+
+        /// <summary>Once a frame, before the first camera draws: what the mods have asked of the film is put together and handed on (see Film).</summary>
+        void BeforeDrawing(Camera cam)
+        {
+            if (filmed == Time.frameCount) return;
+            filmed = Time.frameCount;
+            Film.Apply();
         }
 
         void OnDestroy()
         {
+            Camera.onPreCull -= BeforeDrawing;
             foreach (Mod mod in Kit.Mods) mod.SaveIfDue(true);
             Unlock();
             if (button != null && ApplicationLauncher.Instance != null) ApplicationLauncher.Instance.RemoveModApplication(button);

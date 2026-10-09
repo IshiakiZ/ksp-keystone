@@ -6,5 +6,6 @@ repository's front page.
 * [For players](For-players.md): the window and where settings are kept
 * [For mod authors](For-mod-authors.md): everything a mod can use
 * [The lens](The-lens.md): depth of field, motion blur and grain for any mod, and where it works
+* [The film](The-film.md): exposure, a film curve, colour and glow for any mod, done by TUFX where it is installed
 * [Which systems it works on](Which-systems-it-works-on.md)
 * [Building it yourself](Building.md)

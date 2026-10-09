@@ -1,8 +1,9 @@
 # Keystone
 
-The base that a family of small Kerbal Space Program 1 mods stands on: Smooth Portraits, Kerbal Skins and
-Cinema Camera so far. On its own it does nothing you can see except offer a settings window, in which each
-mod that uses it gets a page. It also has a lens that any of them can put in front of the game's camera.
+The base that a family of small Kerbal Space Program 1 mods stands on: Smooth Portraits, Kerbal Skins,
+Cinema Camera and Natural Light so far. On its own it does nothing you can see except offer a settings
+window, in which each mod that uses it gets a page. It also has a lens that any of them can put in front
+of the game's camera, and a film that any of them can put in it.
 
 For Kerbal Space Program 1.12.x.
 
@@ -22,7 +23,7 @@ For Kerbal Space Program 1.12.x.
 Reference `Keystone.dll`, say that you need it, and register:
 
 ```csharp
-[assembly: KSPAssemblyDependency("Keystone", 0, 3)]
+[assembly: KSPAssemblyDependency("Keystone", 0, 4)]
 
 Mod mod = Kit.Register("Smooth Portraits", "0.1.0", "A line about what the mod does.");
 Toggle on = mod.Toggle("on", "Smooth portraits", true, "What the pointer shows when held over it.");
@@ -38,6 +39,15 @@ A setting takes what was saved for it the moment it is made, and is read ever af
 motion blur, grain, darker corners, colour fringes and the bend of a wide lens, from one shader of its own
 and no other mod. A mod fills in a `Look` and hands it over every frame; Cinema Camera is the mod that
 uses it. [How it works, and where](docs/The-lens.md).
+
+## The film
+
+`Keystone.Film` does what a film and its developing do: an exposure, a film curve for what is brighter
+than white, contrast and colour, a glow round what is bright, darkened creases. A mod fills in a `Grade`
+and asks for it every frame; more than one mod may ask at once (one for a look, another for an exposure)
+and what they ask for is put together. The base has no way of its own to do this yet: it is done by the
+TUFX mod's post-processing where TUFX is installed, and not at all where it is not. Natural Light is the
+mod that uses it. [More](docs/The-film.md).
 
 ## Which systems it works on
 

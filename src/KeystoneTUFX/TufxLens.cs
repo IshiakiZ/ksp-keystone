@@ -3,8 +3,8 @@ using UnityEngine;
 using UnityEngine.Rendering.PostProcessing;
 
 #if !DEV
-[assembly: KSPAssembly("KeystoneTUFX", 0, 1)]
-[assembly: KSPAssemblyDependency("Keystone", 0, 2)]
+[assembly: KSPAssembly("KeystoneTUFX", 0, 2)]
+[assembly: KSPAssemblyDependency("Keystone", 0, 4)]
 [assembly: KSPAssemblyDependency("TUFX", 1, 1)]
 #endif
 
@@ -25,6 +25,7 @@ namespace KeystoneTUFX
         void Awake()
         {
             if (!(Lens.Other is TufxLens)) Lens.Other = new TufxLens();
+            if (!(Film.Other is TufxFilm)) Film.Other = new TufxFilm();
             Destroy(gameObject);
         }
     }
