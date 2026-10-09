@@ -31,14 +31,14 @@ Slider most = mod.Slider("most", "At most", 60f, 10f, 144f, " a second", 0);
 ```
 
 A setting takes what was saved for it the moment it is made, and is read ever after as its `Value`.
-[Everything a mod can use](docs/For-mod-authors.md).
+[Everything a mod can use](https://github.com/IshiakiZ/ksp-keystone/wiki/For-mod-authors).
 
 ## The lens
 
 `Keystone.Lens` does to a camera's finished picture what a lens, a shutter and a film do: depth of field,
 motion blur, grain, darker corners, colour fringes and the bend of a wide lens, from one shader of its own
 and no other mod. A mod fills in a `Look` and hands it over every frame; Cinema Camera is the mod that
-uses it. [How it works, and where](docs/The-lens.md).
+uses it. [How it works, and where](https://github.com/IshiakiZ/ksp-keystone/wiki/The-lens).
 
 ## The film
 
@@ -47,7 +47,7 @@ than white, contrast and colour, a glow round what is bright, darkened creases. 
 and asks for it every frame; more than one mod may ask at once (one for a look, another for an exposure)
 and what they ask for is put together. The base has no way of its own to do this yet: it is done by the
 TUFX mod's post-processing where TUFX is installed, and not at all where it is not. Natural Light is the
-mod that uses it. [More](docs/The-film.md).
+mod that uses it. [More](https://github.com/IshiakiZ/ksp-keystone/wiki/The-film).
 
 ## Which systems it works on
 
@@ -58,7 +58,7 @@ Linux); on Windows' Direct3D it does not work yet, and a mod falls back to TUFX 
 ## Building
 
 `./build.sh` builds Keystone and installs it into the game; it needs the .NET SDK and a copy of the game.
-[More](docs/Building.md).
+[More](https://github.com/IshiakiZ/ksp-keystone/wiki/Building).
 
 ## Licence
 
