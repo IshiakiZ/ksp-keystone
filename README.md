@@ -3,7 +3,7 @@
 The base that a family of small Kerbal Space Program 1 mods stands on: Smooth Portraits, Kerbal Skins,
 Cinema Camera and Natural Light so far. On its own it does nothing you can see except offer a settings
 window, in which each mod that uses it gets a page. It also has a lens that any of them can put in front
-of the game's camera, and a film that any of them can put in it.
+of the game's camera, a film that any of them can put in it, and what the game's rocket engines burn.
 
 For Kerbal Space Program 1.12.x.
 
@@ -48,6 +48,13 @@ and asks for it every frame; more than one mod may ask at once (one for a look, 
 and what they ask for is put together. The base has no way of its own to do this yet: it is done by the
 TUFX mod's post-processing where TUFX is installed, and not at all where it is not. Natural Light is the
 mod that uses it. [More](https://github.com/IshiakiZ/ksp-keystone/wiki/The-film).
+
+## Engines
+
+`Keystone.Engines` is what the mods that draw an engine's exhaust agree on: what each rocket engine burns
+(the game has one rocket fuel; which real one each of its engines is taken as burning is set down here, and
+a config can say otherwise), where the mouth of each nozzle really is and how wide, measured from the
+engine's own model, and how hard it is burning. [More](https://github.com/IshiakiZ/ksp-keystone/wiki/For-mod-authors).
 
 ## Which systems it works on
 
