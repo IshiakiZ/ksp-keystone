@@ -1,0 +1,19 @@
+Keystone @VERSION@
+for Kerbal Space Program 1.12.x
+
+The base a family of small mods stands on: one settings window for all of them, settings that
+are kept between runs, and a lens of its own (depth of field, motion blur, grain) for the mods
+that film. By itself it does nothing you would notice.
+
+INSTALL
+  Copy the Keystone folder in this download's GameData into your KSP's GameData folder. One
+  copy serves every mod that uses it; each of those mods' own downloads has a copy in it too.
+
+USE
+  The Keystone window is where every mod that stands on it keeps its settings: the keystone
+  button on the game's toolbar, or Option-K on a Mac and Alt-K elsewhere.
+
+WHERE IT WORKS
+  Made and tried on a Mac. Nobody has run it on Windows or Linux yet.
+
+Everything else: https://github.com/IshiakiZ/ksp-keystone
