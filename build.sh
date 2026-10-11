@@ -7,7 +7,8 @@
 #   ./build.sh shaders    pack the lens shader again from tools/shaderpack/lens.glsl (after changing it)
 #
 # KeystoneTUFX.dll (the lens done through the TUFX mod, for where Keystone's own shader cannot run) is built
-# only if TUFX is installed in the game, since it is built against it.
+# only if TUFX is installed in the game, since it is built against it; KeystoneHarmony.dll (what each mod costs,
+# measured through the Harmony mod) only if Harmony is.
 # Needs the .NET SDK (`brew install dotnet`). Override the game location with KSP_DIR=/path/to/KSP.
 set -euo pipefail
 
@@ -16,6 +17,7 @@ MODE="${1:-install}"
 . tools/build/common.sh
 OUT=GameData/Keystone
 TUFX="$KSP_DIR/GameData/TUFX/Plugins/TUFX.dll"
+HARMONY="$KSP_DIR/GameData/000_Harmony/0Harmony.dll"
 
 build() {  # build <folder to build into>
   local into="$1"
@@ -24,6 +26,8 @@ build() {  # build <folder to build into>
   cp src/Keystone/Shaders/*.bundle "$into/PluginData/"
   if [ -f "$TUFX" ]; then WITH="$into/Keystone.dll:$TUFX" compile "$into/KeystoneTUFX.dll" "" src/KeystoneTUFX
   else rm -f "$into/KeystoneTUFX.dll"; echo "left out: KeystoneTUFX (TUFX is not installed here to build it against)"; fi
+  if [ -f "$HARMONY" ]; then WITH="$into/Keystone.dll:$HARMONY" compile "$into/KeystoneHarmony.dll" "" src/KeystoneHarmony
+  else rm -f "$into/KeystoneHarmony.dll"; echo "left out: KeystoneHarmony (Harmony is not installed here to build it against)"; fi
 }
 
 case "$MODE" in
@@ -42,8 +46,9 @@ case "$MODE" in
     cp "$OUT/Keystone.dll" "$TO/"
     # (its shaders go beside the settings the player has made there, which are left alone)
     cp "$OUT"/PluginData/*.bundle "$TO/PluginData/"
-    rm -f "$TO/KeystoneTUFX.dll"
+    rm -f "$TO/KeystoneTUFX.dll" "$TO/KeystoneHarmony.dll"
     [ -f "$OUT/KeystoneTUFX.dll" ] && cp "$OUT/KeystoneTUFX.dll" "$TO/"
+    [ -f "$OUT/KeystoneHarmony.dll" ] && cp "$OUT/KeystoneHarmony.dll" "$TO/"
     echo "ok: Keystone installed to $TO (restart KSP to load it)"
     ;;
   shaders)

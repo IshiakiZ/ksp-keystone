@@ -1,17 +1,20 @@
 Keystone @VERSION@
 for Kerbal Space Program 1.12.x
 
-The base a family of small mods stands on: one settings window for all of them, settings that
-are kept between runs, and a lens of its own (depth of field, motion blur, grain) for the mods
-that film. By itself it does nothing you would notice.
+The base a family of small mods stands on: one window that lists every mod installed (the
+mods of this family with their switches and settings, every other with what can be known of
+it), settings that are kept between runs, keys you can change, a page of what each mod costs,
+and a lens of its own (depth of field, motion blur, grain) for the mods that film.
 
 INSTALL
   Copy the Keystone folder in this download's GameData into your KSP's GameData folder. One
   copy serves every mod that uses it; each of those mods' own downloads has a copy in it too.
+  The page of what each mod costs needs the Harmony mod (HarmonyKSP); without it, the rest works.
 
 USE
-  The Keystone window is where every mod that stands on it keeps its settings: the keystone
-  button on the game's toolbar, or Option-K on a Mac and Alt-K elsewhere.
+  The keystone button on the game's toolbar, or Option-K on a Mac and Alt-K elsewhere.
+  Looking online for newer versions of your mods is off until you switch it on, at the foot of
+  the list; nothing is ever downloaded or installed.
 
 WHERE IT WORKS
   Made and tried on a Mac. Nobody has run it on Windows or Linux yet.

@@ -32,10 +32,24 @@ Shader "Keystone/Lens"
             #define SampleFlat(S, uv) S.SampleLevel(sampler##S, uv, 0.0)
             #define Mod(x, y) ((x) - (y) * floor((x) / (y)))
             #define GreaterThan(a, b) ((a) > (b))
+            #define GreaterThanEqual(a, b) ((a) >= (b))
+            #define LessThan(a, b) ((a) < (b))
+            #define LessThanEqual(a, b) ((a) <= (b))
             float4 TexelFetch(Texture2D t, int2 p, int lod) { return t.Load(int3(p, lod)); }
             float4 TexelFetch(Texture3D t, int3 p, int lod) { return t.Load(int4(p, lod)); }
             int2 TextureSize(Texture2D t, int lod) { uint w, h; t.GetDimensions(w, h); return int2(w, h); }
             bool AllZero(float4 v) { return !any(v); }
+            // gl_FragCoord: which pixel is being drawn, its rows counted from the bottom, as every picture's are read here. Direct3D counts
+            // the rows of what it draws into from the top, and the game draws into its pictures upside down to make up for it (saying so with
+            // _ProjectionParams.x at -1): so where it is drawing straight to the screen, the row is turned over, or each picture read by pixel
+            // (the camera's depth, the smoke drawn small) would be read upside down.
+            float4 FragCoord(float4 pos)
+            {
+            #if UNITY_UV_STARTS_AT_TOP
+                if (_ProjectionParams.x > 0.0) pos.y = _ScreenParams.y - pos.y;
+            #endif
+                return pos;
+            }
 
             float4 _LensSheet;     // xy: 1 (the sheet as large as the screen), z: its depth, w: 1
             float4 _LensStage;     // x: 1 for the first of those, 2 for the second
@@ -48,15 +62,6 @@ Shader "Keystone/Lens"
             Texture2D _LensBlur; SamplerState sampler_LensBlur;     // rgb: the picture out of focus (half size), a: how much of it goes into the finished picture
             Texture2D _CameraMotionVectorsTexture; SamplerState sampler_CameraMotionVectorsTexture;
             Texture2D _CameraDepthTexture; SamplerState sampler_CameraDepthTexture;
-
-            float4 DepthFetch(int2 p, int lod)
-            {
-            #if UNITY_UV_STARTS_AT_TOP
-                if (_ProjectionParams.x > 0.0) { uint w, h; _CameraDepthTexture.GetDimensions(w, h); p.y = (int)h - 1 - p.y; }
-            #endif
-                return _CameraDepthTexture.Load(int3(p, lod));
-            }
-
 
             struct v2f
             {
@@ -174,7 +179,7 @@ Shader "Keystone/Lens"
                     {
                         if (n >= looks) break;
                         // (each look a little differently placed from pixel to pixel and frame to frame, so that few looks show as grain and not as copies)
-                        float2 along = went * ((float(n) + chance(IN.pos.xy + _LensFrame.x * 7.31)) / _LensMove.y - 0.5);
+                        float2 along = went * ((float(n) + chance(FragCoord(IN.pos).xy + _LensFrame.x * 7.31)) / _LensMove.y - 0.5);
                         if (parted > 0.0) colour += float3(picture(red + along).r, picture(from + along).g, picture(blue + along).b);
                         else colour += picture(from + along);
                     }
@@ -190,7 +195,7 @@ Shader "Keystone/Lens"
                 // Grain: fast film is made of bigger crystals, and they show most in the middle tones.
                 if (_LensMarks.w > 0.0)
                 {
-                    float2 crystal = floor(IN.pos.xy / _LensFrame.z);
+                    float2 crystal = floor(FragCoord(IN.pos).xy / _LensFrame.z);
                     float speck = chance(crystal + _LensFrame.x * 3.17) + chance(crystal * 1.37 + _LensFrame.x * 5.71 + 19.0) - 1.0;
                     float light = clamp(dot(colour, float3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
                     colour += colour * speck * _LensMarks.w * (1.4 - light) + ((float3)(speck * _LensMarks.w * 0.02));
