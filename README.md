@@ -6,6 +6,8 @@ listed there, Keystone's own with their switches and settings, every other with 
 It also has keys a player can change, a lens and a film that any of its mods can use, what the game's
 rocket engines burn, and a page of what each mod costs the game.
 
+![Keystone's window beside a rocket on the pad: the list of mods, then each mod's settings, then what each mod costs](src/Keystone/img/keystone.gif)
+
 For Kerbal Space Program 1.12.x.
 
 ## For players
@@ -75,4 +77,4 @@ engine's own model, and how hard it is burning. [More](https://github.com/Ishiak
 
 ## Licence
 
-[MIT](LICENSE).
+[CC BY 4.0](LICENSE): use it, change it and pass it on as you like, as long as you credit Ishiaki and link back here.
