@@ -18,6 +18,8 @@ USE
 
 WHERE IT WORKS
   Made and tried on a Mac, and tried on Windows 11 (on the game's own Direct3D 11, and
-  on OpenGL). Nobody has run it on Linux yet.
+  on OpenGL). What 0.7.2 changed (how the window is dragged, and its hold on the wheel
+  while the pointer is over it) has been tried on the Mac only. Nobody has run it on
+  Linux yet.
 
 Everything else: https://github.com/IshiakiZ/ksp-keystone

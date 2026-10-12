@@ -109,10 +109,21 @@ namespace Keystone
         {
             get
             {
-                if (all == null || madeWith != Kit.Mods.Count) { madeWith = Kit.Mods.Count; all = Make(); }
+                if (all == null || madeWith != Kit.Mods.Count)
+                {
+                    madeWith = Kit.Mods.Count; all = Make();
+#if DEV
+                    if (Unlisted.Count > 0) all.RemoveAll(one => Unlisted.Contains(one.Name));
+#endif
+                }
                 return all;
             }
         }
+
+#if DEV
+        /// <summary>For the development build: mods left out of the list by name, for a picture of the window that is to show only some of what is installed (see Host.Unlist).</summary>
+        public static readonly HashSet<string> Unlisted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+#endif
 
         /// <summary>Look again (a development build has swapped a mod in; the player asked).</summary>
         public static void Again() => all = null;

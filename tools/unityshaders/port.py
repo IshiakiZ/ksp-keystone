@@ -28,7 +28,8 @@ import make_bundle  # noqa: E402  (for each shader's name, textures and how it i
 
 # Where each goes in the Unity project.
 FOLDER = {"volume": "VolumetricExplosions", "enlarge": "VolumetricExplosions", "layers": "VolumetricExplosions", "mark": "VolumetricExplosions", "shock": "VolumetricExplosions", "shadow": "VolumetricExplosions", "lens": "Keystone",
-          "shafts": "NaturalLight", "clean": "NaturalLight", "veil": "NaturalLight", "clouds": "NaturalWeather", "cloudsover": "NaturalWeather", "cloudshade": "NaturalWeather"}
+          "shafts": "NaturalLight", "clean": "NaturalLight", "veil": "NaturalLight", "clouds": "NaturalWeather", "cloudsover": "NaturalWeather", "cloudshade": "NaturalWeather",
+          "ocean": "NaturalOcean", "oceanfoam": "NaturalOcean", "oceanweed": "NaturalOcean", "oceanunder": "NaturalOcean"}
 
 # What Unity's own headers already declare.
 GIVEN = {"_WorldSpaceCameraPos", "_ProjectionParams", "_ZBufferParams", "_ScreenParams", "_Time"}
@@ -157,6 +158,7 @@ COMMON = """
             #define hlslcc_mtx4x4unity_MatrixV transpose(UNITY_MATRIX_V)
             #define SampleLod(S, uv, lod) S.SampleLevel(sampler##S, uv, lod)
             #define SampleFlat(S, uv) S.SampleLevel(sampler##S, uv, 0.0)
+            #define SampleGradient(S, uv, dx, dy) S.SampleGrad(sampler##S, uv, dx, dy)
             #define Mod(x, y) ((x) - (y) * floor((x) / (y)))
             #define GreaterThan(a, b) ((a) > (b))
             #define GreaterThanEqual(a, b) ((a) >= (b))
@@ -248,10 +250,21 @@ def convert(text, stage):
     text = re.sub(r"\bbvec([234])\b", r"bool\1", text)
     text = re.sub(r"\bvec([234])\b", r"float\1", text)
     text = re.sub(r"\bmat([234])\b", r"float\1x\1", text)
-    for was, now in (("textureLod(", "SampleLod("), ("texture(", "SampleFlat("), ("texelFetch(", "TexelFetch("), ("textureSize(", "TextureSize("), ("mix(", "lerp("), ("fract(", "frac("),
+    for was, now in (("textureLod(", "SampleLod("), ("textureGrad(", "SampleGradient("), ("texture(", "SampleFlat("), ("texelFetch(", "TexelFetch("), ("textureSize(", "TextureSize("), ("mix(", "lerp("), ("fract(", "frac("),
                      ("inversesqrt(", "rsqrt("), ("mod(", "Mod("), ("greaterThanEqual(", "GreaterThanEqual("), ("greaterThan(", "GreaterThan("), ("lessThanEqual(", "LessThanEqual("), ("lessThan(", "LessThan("), ("dFdx(", "ddx("), ("dFdy(", "ddy("), ("floatBitsToInt(", "asint(")):
         text = re.sub(r"(?<![\w.])" + re.escape(was), now, text)
     text = makers(text)
+    # (a list made in one go, float4[8](a, b, ...): HLSL writes it in braces)
+    while True:
+        found = re.search(r"\b(?:float[234]?|int|uint)\[\d+\]\(", text)
+        if not found: break
+        end = bracket(text, found.end() - 1)
+        text = text[:found.start()] + "{" + text[found.end():end] + "}" + text[end + 1:]
+    # (which side of a triangle is seen: handed to frag as a value of its own, see program. NOT TRIED: where Direct3D draws
+    # into a picture upside down the game turns its triangles over, and which side counts as the front may be turned with it.)
+    text = re.sub(r"\bgl_FrontFacing\b", "isFront", text)
+    # (which point of the mesh this is, by its number: handed to vert as a value of its own, see program)
+    text = re.sub(r"\bgl_VertexID\b", "int(vertexId)", text)
     text = re.sub(r"\bgl_FragCoord\b", "FragCoord(IN.pos)", text)
     text = re.sub(r"\bgl_Position\b", "OUT.pos", text)
     text = re.sub(r"\bSV_Target0\b", "result", text)
@@ -281,6 +294,9 @@ def stage_of(text):
             if found: matrices.append(found.group(1)); continue
             found = re.match(r"uniform sampler([23])D (\w+);", bare)
             if found: textures.append((found.group(2), int(found.group(1)), line.split("//", 1)[1].strip() if "//" in line else "")); continue
+            # (a stack of flat textures: Natural Ocean's waves. Added 2026-10-11 on the Mac, where nothing can compile it.)
+            found = re.match(r"uniform sampler2DArray (\w+);", bare)
+            if found: textures.append((found.group(1), "2DArray", line.split("//", 1)[1].strip() if "//" in line else "")); continue
             found = re.match(r"uniform (\w+) (\w+);", bare)
             if found: uniforms.append((found.group(2), found.group(1), line.split("//", 1)[1].strip() if "//" in line else "")); continue
             found = re.match(r"(in|out) (\w+) (\w+);", bare)
@@ -354,7 +370,7 @@ def program(which, header):
     for stage in (vertex, fragment):
         for name, dims, note in stage["textures"]:
             if name in seen: continue
-            seen.add(name); textures.append("            Texture%dD %s; SamplerState sampler%s;%s" % (dims, name, name, "     // " + note if note else ""))
+            seen.add(name); textures.append("            Texture%s %s; SamplerState sampler%s;%s" % (dims if dims == "2DArray" else "%dD" % dims, name, name, "     // " + note if note else ""))
     statics = ["            static %s %s;" % (kind(t), n) for n, t in fragment["statics"] + vertex["statics"]]
     passed = ["                float4 pos : SV_POSITION;"] + ["                %s %s : TEXCOORD%s;" % (kind(t), n, n[-1]) for n, t in vertex["outs"]]
 
@@ -364,7 +380,8 @@ def program(which, header):
     if statics: out.append("\n".join(statics))
     out.append("\n            struct v2f\n            {\n%s\n            };\n" % "\n".join(passed))
     if vertex["helpers"].strip(): out.append(indented(convert(vertex["helpers"], "vertex"), "            ") + "\n")
-    out.append("            v2f vert(float3 in_POSITION0 : POSITION)\n            {\n                v2f OUT = (v2f)0;")
+    numbered = ", uint vertexId : SV_VertexID" if re.search(r"\bgl_VertexID\b", uncommented(vertex["main"] + vertex["helpers"])) else ""
+    out.append("            v2f vert(float3 in_POSITION0 : POSITION%s)\n            {\n                v2f OUT = (v2f)0;" % numbered)
     out.append(indented(re.sub(r"\breturn;", "return OUT;", convert(vertex["main"], "vertex")), "            "))
     out.append("                return OUT;\n            }\n")
     if fragment["helpers"].strip(): out.append(indented(convert(fragment["helpers"], "fragment"), "            ") + "\n")
@@ -376,7 +393,8 @@ def program(which, header):
         out.append(indented(re.sub(r"\breturn;", "return Both(result, result1);", convert(fragment["main"], "fragment")), "            "))
         out.append("                return Both(result, result1);\n            }")
     else:
-        out.append("            float4 frag(v2f IN) : SV_Target\n            {\n                float4 result = float4(0.0, 0.0, 0.0, 0.0);")
+        facing = ", bool isFront : SV_IsFrontFace" if re.search(r"\bgl_FrontFacing\b", uncommented(fragment["main"] + fragment["helpers"])) else ""
+        out.append("            float4 frag(v2f IN%s) : SV_Target\n            {\n                float4 result = float4(0.0, 0.0, 0.0, 0.0);" % facing)
         out.append(indented(re.sub(r"\breturn;", "return result;", convert(fragment["main"], "fragment")), "            "))
         out.append("                return result;\n            }")
     return out, clash

@@ -28,8 +28,10 @@ namespace Keystone
         public const string TypedName = "keystone:";
         const string SearchName = TypedName + "search";
         static readonly int WindowId = "Keystone settings".GetHashCode();
+        static readonly int GripHint = "Keystone grip".GetHashCode();
 
-        bool open, locked, typing;
+        bool open, typing;
+        bool carried; Vector2 carriedBy;                 // the window is held by its top edge, and where on it the pointer has hold
         Listed shown;                                    // the mod whose page is open (nothing: the list)
         Listed wanted; bool going;                       // where a click asked to go: gone to at the start of the next drawing (a page must not change half way through one)
         int filter, filterWanted;                        // 0 every mod, 1 those with settings here, 2 those with a newer version out
@@ -154,7 +156,9 @@ namespace Keystone
         {
             for (int n = 0; n < Kit.Mods.Count; n++) Kit.Mods[n].SaveIfDue();
             Kit.Own.SaveIfDue();
-            if (HighLogic.LoadedScene == GameScenes.LOADING || HighLogic.LoadedScene == GameScenes.LOADINGBUFFER) return;
+            bool loading = HighLogic.LoadedScene == GameScenes.LOADING || HighLogic.LoadedScene == GameScenes.LOADINGBUFFER;
+            Pointer(open && !loading && Kit.Mods.Count > 0 && drawnHigh > 0f);
+            if (loading) return;
             if (Kit.WindowKey.Pressed) Open = !open;
             // (measuring is begun and ended here, outside the window's drawing: setting it up wraps that drawing's own methods too)
             if (measure != 0)
@@ -190,17 +194,22 @@ namespace Keystone
             GUI.matrix = Matrix4x4.Scale(new Vector3(scale, scale, 1f));
             float wide = Screen.width / scale, high = Screen.height / scale;
             if (window.x < 0f) window.x = Mathf.Max(0f, 0.5f * (wide - Width) - 140f);
-            window.height = 0f;
-            window = GUILayout.Window(WindowId, window, Draw, "Mods", GUILayout.Width(Width));
-            if (e.type == EventType.Repaint) drawnHigh = window.height;
             // (kept on the screen: all of it, where it fits)
-            window.x = Mathf.Clamp(window.x, 0f, Mathf.Max(0f, wide - window.width));
-            window.y = Mathf.Clamp(window.y, 0f, Mathf.Max(0f, high - Mathf.Min(window.height, high)));
-            // While the pointer is over the window, a click or the wheel is for the window and not for what lies under it.
-            var pointer = new Vector2(Input.mousePosition.x / scale, (Screen.height - Input.mousePosition.y) / scale);
-            bool over = window.Contains(pointer);
-            if (over && !locked) { InputLockManager.SetControlLock(ControlTypes.CAMERACONTROLS | ControlTypes.KSC_ALL | ControlTypes.EDITOR_SOFT_LOCK, Lock); locked = true; }
-            else if (!over && locked) Unlock(false);
+            window.x = Mathf.Clamp(window.x, 0f, Mathf.Max(0f, wide - Width));
+            window.y = Mathf.Clamp(window.y, 0f, Mathf.Max(0f, high - Mathf.Min(drawnHigh, high)));
+            // How tall it is to be is found afresh in every laying out (a height of nought asks for that): what is in it
+            // changes from page to page. In the laying out only. Asked in every event, as it first was, the nought came
+            // back as the window's height in every frame in which the game had itself moved the window (its own dragging,
+            // GUI.DragWindow, and the wheel over it): the window was drawn with no height then, and so blinked for as long
+            // as it was being dragged. (Seen with the pointer: 8 drawings of 8 in a drag; none since.)
+            // Where it is, is this mod's alone to say: it is carried by hand (see Pointer).
+            window.width = Width;
+            window.height = e.type == EventType.Layout ? 0f : drawnHigh;
+            Rect given = GUILayout.Window(WindowId, window, Draw, "Mods", GUILayout.Width(Width));
+            if (e.type == EventType.Repaint && given.height > 0f) drawnHigh = given.height;
+#if DEV
+            if (tracing > 0) Trace(e.type + " asked " + window.height.ToString("F0") + " given " + given.height.ToString("F0") + " at " + given.x.ToString("F0") + "," + given.y.ToString("F0") + (e.isMouse ? " mouse " + e.mousePosition.x.ToString("F0") + "," + e.mousePosition.y.ToString("F0") : "") + (InputLockManager.IsLocked(ControlTypes.CAMERACONTROLS) ? " locked" : " free"));
+#endif
             // While something is being typed into the window, or a key chosen, the keys are for the window: an M must not open the map.
             bool typed = (GUI.GetNameOfFocusedControl() ?? "").StartsWith(TypedName, StringComparison.Ordinal) || Hotkey.Choosing != null;
             if (typed && !typing) { InputLockManager.SetControlLock(ControlTypes.KEYBOARDINPUT, TypingLock); typing = true; }
@@ -208,9 +217,45 @@ namespace Keystone
             GUI.matrix = before;
         }
 
+        /// <summary>
+        /// The pointer and the window, once a frame and before the game's cameras look at the wheel. While the pointer is
+        /// over the window, or has hold of it, a click or the wheel is for the window and not for what lies under it; and
+        /// a window held by its top edge goes with the pointer.
+        ///
+        /// (Once a frame, from where the window was last drawn. As it first was this was seen to in every event of the
+        /// drawing, from the place the game gave back. In a laying out that place has no height yet, so the hold on the
+        /// cameras was let go there and taken again at the drawing, twice a frame; and a turn of the wheel over the window
+        /// is handed to the window's own drawing alone, the rest is not run for it, so the hold stayed let go and the
+        /// camera took the wheel as well: 48 m to 62 m from the rocket on one turn, as seen.)
+        /// </summary>
+        void Pointer(bool shows)
+        {
+            float scale = UiScale;
+            Vector2 pointer = PointerAt();
+            if (carried && (!shows || !Input.GetMouseButton(0))) carried = false;
+            if (carried)
+            {
+                window.x = Mathf.Clamp(pointer.x - carriedBy.x, 0f, Mathf.Max(0f, Screen.width / scale - Width));
+                window.y = Mathf.Clamp(pointer.y - carriedBy.y, 0f, Mathf.Max(0f, Screen.height / scale - Mathf.Min(drawnHigh, Screen.height / scale)));
+            }
+            bool over = shows && (carried || new Rect(window.x, window.y, Width, drawnHigh).Contains(pointer));
+            // (asked of the game itself, not remembered: the game lets every hold go at times, from its pause menu for one)
+            bool held = InputLockManager.lockStack.ContainsKey(Lock);
+            if (over && !held) InputLockManager.SetControlLock(ControlTypes.CAMERACONTROLS | ControlTypes.KSC_ALL | ControlTypes.EDITOR_SOFT_LOCK, Lock);
+            else if (!over && held) InputLockManager.RemoveControlLock(Lock);
+        }
+
+        /// <summary>Where the pointer is, in the game's interface units from the top left of the screen.</summary>
+        static Vector2 PointerAt()
+        {
+            float scale = UiScale;
+            return new Vector2(Input.mousePosition.x / scale, (Screen.height - Input.mousePosition.y) / scale);
+        }
+
         void Unlock(bool all = true)
         {
-            if (locked) { InputLockManager.RemoveControlLock(Lock); locked = false; }
+            InputLockManager.RemoveControlLock(Lock);
+            carried = false;
             if (all && typing)
             {
                 InputLockManager.RemoveControlLock(TypingLock);
@@ -270,7 +315,14 @@ namespace Keystone
             GUILayout.EndHorizontal();
             // (how tall everything but the part that scrolls is, from this one drawing: the foot's bottom, less that part)
             if (e.type == EventType.Repaint) chrome = Mathf.Clamp(GUILayoutUtility.GetLastRect().yMax + 12f - partShown, 60f, 500f);
-            GUI.DragWindow(new Rect(0f, 0f, 10000f, 24f));
+            // Carried by its top edge. By hand (Pointer does the carrying): the game's own way of it, GUI.DragWindow, moves
+            // the window behind this mod's back, and that is what made it blink (see where it is drawn).
+            bool pressed = e.type == EventType.MouseDown;
+            if (Held(new Rect(0f, 0f, Width, 24f), GripHint, out Vector2 _) && pressed)
+            {
+                carriedBy = PointerAt() - new Vector2(window.x, window.y);
+                carried = true;
+            }
         }
 
         static Listed Find(string id)
@@ -673,6 +725,28 @@ namespace Keystone
         }
 
 #if DEV
+        static int tracing;
+        static readonly System.Text.StringBuilder traced = new System.Text.StringBuilder();
+        static void Trace(string line) { traced.Append(Time.frameCount).Append(' ').Append(line).Append('\n'); tracing--; }
+
+        /// <summary>For the development build: write down the next so many events of the window's drawing (a number), with
+        /// what was asked and given for its height and whether the cameras are held; or say what was written down ("read").</summary>
+        public static string Events(string what)
+        {
+            if (int.TryParse(what, out int n)) { traced.Length = 0; tracing = n; return "writing down " + n; }
+            return traced.Length == 0 ? "nothing written down" : traced.ToString();
+        }
+
+        void LateUpdate()
+        {
+            if (tracing <= 0) return;
+            float wheel = GameSettings.AXIS_MOUSEWHEEL.GetAxis();
+            if (wheel != 0f || Input.GetMouseButton(0))
+                Trace("frame: wheel " + wheel.ToString("F2") + (Input.GetMouseButton(0) ? " button down" : "") + (InputLockManager.IsLocked(ControlTypes.CAMERACONTROLS) ? " locked" : " free")
+                      + (FlightCamera.fetch != null ? " camera at " + FlightCamera.fetch.Distance.ToString("F1") : "") + " window " + Instance.window.x.ToString("F0") + "," + Instance.window.y.ToString("F0")
+                      + " pointer " + Input.mousePosition.x.ToString("F0") + "," + (Screen.height - Input.mousePosition.y).ToString("F0"));
+        }
+
         /// <summary>For the development build: open or close the window, and say what there is in it.</summary>
         public static string Show()
         {
@@ -738,14 +812,45 @@ namespace Keystone
             return "filter " + Instance.filterWanted + ", search '" + Instance.searchTyped + "'";
         }
 
-        /// <summary>For the development build: the size of the game's interface (as its settings set it, 0.8 to 2), for this run only; says what it was.</summary>
+        /// <summary>For the development build: leave mods out of the list by name ("a|b|c"; nothing: every one listed again), for a picture
+        /// of the window that is to show only some of what is installed. Says who is listed.</summary>
+        public static string Unlist(string names)
+        {
+            Listing.Unlisted.Clear();
+            foreach (string name in (names ?? "").Split('|')) if (name.Trim().Length > 0) Listing.Unlisted.Add(name.Trim());
+            Listing.Again();
+            var listed = new List<string>();
+            foreach (Listed one in Listing.All) listed.Add(one.Name);
+            return string.Join(", ", listed.ToArray());
+        }
+
+        /// <summary>For the development build: where the window is (its left and top, in the game's interface units).</summary>
+        public static string Place(string where)
+        {
+            if (Instance == null) return "not running";
+            string[] parts = (where ?? "").Split(' ');
+            if (parts.Length == 2 && float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float x)
+                && float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float y)) { Instance.window.x = x; Instance.window.y = y; }
+            return "at " + Instance.window.x + " " + Instance.window.y;
+        }
+
+        /// <summary>For the development build: the size of the game's interface (as its settings set it, 0.8 to 2), for this run only; says
+        /// what it was. With the word "bare" after the number the game's toolbar is put away as well (at twice the size it stands
+        /// over the edge of the crew's portraits); without it the toolbar is shown again.</summary>
         public static string Scale(string value)
         {
             float was = GameSettings.UI_SCALE;
-            if (float.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float now))
+            string[] parts = (value ?? "").Trim().Split(' ');
+            if (float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float now))
             {
                 GameSettings.UI_SCALE = now;
                 try { KSP.UI.UIMasterController.Instance.SetScale(now); KSP.UI.UIMasterController.Instance.SetAppScale(GameSettings.UI_SCALE_APPS * now); } catch (Exception) { }
+                try
+                {
+                    var bar = KSP.UI.Screens.ApplicationLauncher.Instance;
+                    if (bar != null) { if (parts.Length > 1 && parts[1] == "bare") bar.Hide(); else bar.Show(); }
+                }
+                catch (Exception) { }
             }
             return "was " + was.ToString(System.Globalization.CultureInfo.InvariantCulture) + ", now " + GameSettings.UI_SCALE.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }

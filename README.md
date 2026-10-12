@@ -68,6 +68,9 @@ engine's own model, and how hard it is burning. [More](https://github.com/Ishiak
 | Windows | Tried on Windows 11 (KSP 1.12.5, Direct3D 11): the window (Alt-K), the list of mods, their pages, settings kept across a restart, and the lens, by its shader compiled for Direct3D (`PluginData/lens-windows.bundle`); started on OpenGL (`-force-glcore`), its OpenGL lens. With HarmonyKSP and TUFX installed (2026-10-10): the costs page (the game's main thread measured mod by mod, 193 methods of 19 mods), the film (through `KeystoneTUFX`: Natural Light's film look, Impact Frames' inked frames), looking online (one newer version found among five mods) and changing a key. With its Direct3D lens taken out, the lens asked of TUFX instead (Cinema Camera: "The blur, the smear and the grain are being done by TUFX"). A settings file held open by another program as it was to be written is now written once it is free (it was left unwritten until the next change). |
 | Linux | **Never run.** The lens there is the OpenGL shader the Mac runs. |
 
+What 0.7.2 changed (how the window is dragged, and its hold on the wheel and on clicks while the pointer is over it)
+has been tried on the Mac only: it is plain C#, with nothing of one system's own in it.
+
 [More](https://github.com/IshiakiZ/ksp-keystone/wiki/Which-systems-it-works-on).
 
 ## Building

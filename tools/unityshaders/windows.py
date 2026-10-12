@@ -11,6 +11,7 @@ packed into the bundles the mods look for when the game runs on Direct3D:
     src/Keystone/Shaders/lens-windows.bundle                   Keystone's lens
     src/NaturalLight/Shaders/light-windows.bundle             Natural Light's three: Shafts, Clean, Veil
     src/NaturalWeather/Shaders/clouds-windows.bundle          Natural Weather's clouds: Clouds, CloudsOver, CloudShade
+    src/NaturalOcean/Shaders/ocean-windows.bundle (and oceanfoam-, oceanweed-, oceanunder-)   Natural Ocean's four, one each
 
 Run it again after any change to a GLSL file (so after each `git pull origin main`): it makes every bundle afresh from the
 GLSL as it is. The game folder is only read, for a pattern, as tools/shaderpack/make_bundle.py does for OpenGL: the game's own
@@ -47,6 +48,12 @@ BUNDLES = [
     ("src/Keystone/Shaders/lens-windows.bundle", ["lens"]),
     ("src/NaturalLight/Shaders/light-windows.bundle", ["shafts", "clean", "veil"]),
     ("src/NaturalWeather/Shaders/clouds-windows.bundle", ["clouds", "cloudsover", "cloudshade"]),
+    # (Natural Ocean looks for one bundle a shader, Sea.Load: listed 2026-10-11, never yet ported or compiled. See
+    # HANDOFF-README.md, "On the Windows PC", for what Direct3D will want of them.)
+    ("src/NaturalOcean/Shaders/ocean-windows.bundle", ["ocean"]),
+    ("src/NaturalOcean/Shaders/oceanfoam-windows.bundle", ["oceanfoam"]),
+    ("src/NaturalOcean/Shaders/oceanweed-windows.bundle", ["oceanweed"]),
+    ("src/NaturalOcean/Shaders/oceanunder-windows.bundle", ["oceanunder"]),
 ]
 OUT = os.path.join(ROOT, "build", "windows-shaders")
 
