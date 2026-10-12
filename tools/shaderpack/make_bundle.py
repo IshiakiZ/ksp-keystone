@@ -158,7 +158,9 @@ SHADERS = {
         "fragment": [("_ZBufferParams", 4, False), ("_CloudRight", 4, False), ("_CloudUp", 4, False), ("_CloudAhead", 4, False), ("_CloudOver", 4, False)],
         "textures": [("_CloudHist", 2), ("_CloudHistD", 2), ("_CameraDepthTexture", 2)],
         "vertex": [("_CloudSheet", 4, False)],
-        "cull": 0.0, "ztest": 8.0,       # (laid over what is there by how much the cloud hides: colour already multiplied by that)
+        # (laid over what is there by how much the cloud hides: colour already multiplied by that. The sheet stands as far off
+        # as the nearest cloud can be (Clouds.cs, Setup) and is hidden by whatever is drawn nearer: 4, nearer or as near)
+        "cull": 0.0, "ztest": 4.0,
     },
     # Natural Ocean's sea: a mesh moved by the waves in its vertex program, drawn solid (it writes how far off it is, so that
     # what is drawn after it, smoke and spray, goes behind the waves it is behind). (Numbers from 201 up.)
@@ -277,24 +279,31 @@ def fixed_locations(code, textures):
     at all (a 2D and a 3D texture on one unit)."""
     text = code.decode("utf-8")
     at = text.index("#ifdef FRAGMENT")
+
+    def placed_in(stage, what):
+        out, placed = [], False
+        for line in stage.split("\n"):
+            m = re.match(r"uniform (sampler\w+) (\w+);(.*)$", line)
+            if m and m.group(2) in textures:
+                where = textures.index(m.group(2))
+                out += ["#ifdef GL_ARB_explicit_uniform_location",
+                        "layout(location = %d) uniform %s %s;%s" % (where, m.group(1), m.group(2), m.group(3)),
+                        "#else", line, "#endif"]
+                continue
+            out.append(line)
+            # (the extension asked for straight after the program's #version line, before anything that is not a directive)
+            if not placed and line.startswith("#version"):
+                out.append("#extension GL_ARB_explicit_uniform_location : enable")
+                placed = True
+        assert placed, "no #version line in the %s program" % what
+        return "\n".join(out)
+
+    # (The vertex program too, where it reads textures: the sea's does, for its waves. Left without places of their own there,
+    # on NVIDIA's OpenGL the sea's two stacks of waves read as nothing and the sea lay flat as glass, with no word in the log:
+    # seen on Windows started with -force-glcore, 2026-10-11.)
     head, body = text[:at], text[at:]
-    lines = body.split("\n")
-    out, placed = [], False
-    for line in lines:
-        m = re.match(r"uniform (sampler\w+) (\w+);(.*)$", line)
-        if m and m.group(2) in textures:
-            where = textures.index(m.group(2))
-            out += ["#ifdef GL_ARB_explicit_uniform_location",
-                    "layout(location = %d) uniform %s %s;%s" % (where, m.group(1), m.group(2), m.group(3)),
-                    "#else", line, "#endif"]
-            continue
-        out.append(line)
-        # (the extension asked for straight after the program's #version line, before anything that is not a directive)
-        if not placed and line.startswith("#version"):
-            out.append("#extension GL_ARB_explicit_uniform_location : enable")
-            placed = True
-    assert placed, "no #version line in the fragment program"
-    return (head + "\n".join(out)).encode("utf-8")
+    if re.search(r"^uniform sampler\w+ \w+;", head, re.M): head = placed_in(head, "vertex")
+    return (head + placed_in(body, "fragment")).encode("utf-8")
 
 
 def build(ksp, out_path, which):
