@@ -8,7 +8,7 @@ and a lens of its own (depth of field, motion blur, grain) for the mods that fil
 
 INSTALL
   Copy the Keystone folder in this download into your KSP's GameData folder. One
-  copy serves every mod that uses it; each of those mods' own downloads has a copy in it too.
+  copy serves every mod that uses it. (Those mods' own downloads do not carry it: each links here.)
   The page of what each mod costs needs the Harmony mod (HarmonyKSP); without it, the rest works.
 
 USE
