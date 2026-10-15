@@ -150,6 +150,8 @@ namespace Keystone
         void OnApplicationQuit()
         {
             foreach (Mod mod in Kit.All()) mod.SaveIfDue(true);
+            // (on Windows, a mod brought up to date waits for the game to close to be put in: Updater)
+            Updater.Closing();
         }
 
         void Update()
@@ -719,6 +721,24 @@ namespace Keystone
                     Application.OpenURL(one.LatestPage);
                 GUILayout.EndHorizontal();
                 if (one.LatestNotes.Length > 0) GUILayout.Label(one.LatestNotes, Faint);
+                // (and the button that brings it up to that version: Updater)
+                if (one.Behind)
+                {
+                    string updating = Updater.Said(one);
+                    if (Updater.CanUpdate(one, out string cannot))
+                    {
+                        GUILayout.BeginHorizontal();
+                        GUI.enabled = !Updater.Busy;
+                        string size = one.LatestZipBytes > 0 ? " (" + (one.LatestZipBytes >= 1048576 ? (one.LatestZipBytes / 1048576.0).ToString("F1") + " MB" : (one.LatestZipBytes / 1024.0).ToString("F0") + " KB") + ")" : "";
+                        if (GUILayout.Button(new GUIContent("Update to " + Safe(one.Latest), "Fetches its newest release" + size + " from its GitHub page, checks that it holds only " + Safe(one.Name) + "'s own folders, and puts it in their place (on Windows, when you close the game). The old version is kept in Keystone/Replaced, beside GameData. Used from the next start."), GUILayout.Width(150f)))
+                            Updater.Begin(this, one);
+                        GUI.enabled = true;
+                        if (updating.Length > 0) GUILayout.Label(Safe(updating), Small);
+                        GUILayout.EndHorizontal();
+                    }
+                    else if (cannot.Length > 0) GUILayout.Label("<color=#9a9a9a>" + Safe(cannot) + "</color>", Small);
+                    else if (updating.Length > 0) GUILayout.Label(Safe(updating), Small);
+                }
             }
             else if (one.Remote.Length > 0 || one.GitHub.Length > 0)
                 GUILayout.Label("<color=#9a9a9a>" + (Online.Allowed ? "Not looked for online yet." : "Whether a newer version is out can be looked for online: the switch is at the foot of the list.") + "</color>", Small);
@@ -1132,24 +1152,63 @@ namespace Keystone
             return now;
         }
 
-        /// <summary>The toolbar button's picture: a keystone, the wedge at the top of an arch that holds the rest in place.</summary>
+        /// <summary>
+        /// The toolbar button's picture: a keystone in its arch, the wedge at the top that holds the rest in place, white and
+        /// standing a little proud of the grey stones round it, on two piers (the owner, 2026-10-13: "change the icon of
+        /// keystone in ksp": it was a grey wedge alone, which read as a bucket). Drawn smooth: four by four looks a pixel.
+        /// </summary>
         static Texture2D Icon()
         {
-            const int size = 38;
-            var picture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            // (Drawn four times as fine as the button's own 38 pixels, and smoothed: the game scales its buttons with its
+            // interface, and a 38-pixel picture went blocky (the owner: "the icon doesnt need to be pixelated").)
+            const int size = 128;
+            const float unit = 38f / size;
+            var picture = new Texture2D(size, size, TextureFormat.RGBA32, true) { filterMode = FilterMode.Trilinear, anisoLevel = 4, wrapMode = TextureWrapMode.Clamp };
             var pixels = new Color32[size * size];
             for (int y = 0; y < size; y++)
                 for (int x = 0; x < size; x++)
                 {
-                    // a wedge, wider at the top: from 8 pixels each side of the middle at the foot to 15 at the head
-                    float up = (y - 5f) / 28f, half = Mathf.Lerp(8f, 15f, up), off = Mathf.Abs(x - 18.5f);
-                    bool inside = up >= 0f && up <= 1f && off <= half;
-                    bool edge = inside && (off > half - 2f || up < 0.07f || up > 0.93f);
-                    pixels[y * size + x] = !inside ? new Color32(0, 0, 0, 0) : edge ? new Color32(40, 44, 48, 255) : new Color32((byte)(150 + 60 * up), (byte)(160 + 60 * up), (byte)(170 + 60 * up), 255);
+                    int key = 0, stone = 0;
+                    for (int sy = 0; sy < 4; sy++)
+                        for (int sx = 0; sx < 4; sx++)
+                        {
+                            int part = IconPart((x + (sx + 0.5f) / 4f) * unit, (y + (sy + 0.5f) / 4f) * unit);
+                            if (part == 2) key++; else if (part == 1) stone++;
+                        }
+                    int cover = key + stone;
+                    if (cover == 0) { pixels[y * size + x] = new Color32(0, 0, 0, 0); continue; }
+                    float k = key / (float)cover;
+                    pixels[y * size + x] = new Color32((byte)(168 + 84 * k), (byte)(178 + 74 * k), (byte)(190 + 62 * k), (byte)(255 * cover / 16));
                 }
             picture.SetPixels32(pixels);
-            picture.Apply();
+            picture.Apply(true);
             return picture;
+        }
+
+#if DEV
+        /// <summary>(Development build: the toolbar's icon written to a file, as the game draws it.)</summary>
+        public static string SaveIcon(string path)
+        {
+            Texture2D t = Icon();
+            System.IO.File.WriteAllBytes(path, t.EncodeToPNG());
+            Destroy(t);
+            return "written: " + path;
+        }
+#endif
+
+        /// <summary>What a point of the icon is (pixels, y up): 2 the keystone, 1 another stone or a pier, 0 nothing.</summary>
+        static int IconPart(float x, float y)
+        {
+            const float middle = 19f, spring = 11f, inner = 8f, outer = 16f, keyHalf = 18f, proud = 3f, gap = 0.6f;
+            const int perSide = 3;
+            float dx = x - middle, dy = y - spring;
+            if (dy < 0f) return y >= 1f && Mathf.Abs(dx) >= inner && Mathf.Abs(dx) <= outer ? 1 : 0;          // (the piers)
+            float r = Mathf.Sqrt(dx * dx + dy * dy), off = Mathf.Abs(Mathf.Atan2(dy, dx) * Mathf.Rad2Deg - 90f);
+            if (off <= keyHalf && r >= inner - 0.6f && dy <= outer + proud)
+                return (keyHalf - off) * Mathf.Deg2Rad * r < gap ? 0 : 2;                                       // (the keystone, its flat top proud of the arch)
+            if (r < inner || r > outer) return 0;
+            float k = (off - keyHalf) / (90f - keyHalf) * perSide, frac = k - Mathf.Floor(k);
+            return Mathf.Min(frac, 1f - frac) * (90f - keyHalf) / perSide * Mathf.Deg2Rad * r < gap ? 0 : 1;   // (the other stones, a gap between each)
         }
     }
 }

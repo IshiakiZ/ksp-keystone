@@ -20,6 +20,17 @@ namespace Keystone
         Dust,             // dust raised by the wind (Duna's storms)
     }
 
+    /// <summary>How a fog came about, which says where it lies, how deep it is and when it goes. (Since Keystone 0.8.)</summary>
+    public enum FogKind
+    {
+        None,
+        Radiation,        // ground fog: a still, clear night over land; shallow; gone by the middle of the morning
+        Advection,        // sea fog: damp air over cooler sea, in banks that drift, onto the coast by night; deep
+        Upslope,          // hill fog: damp air lifted over high ground, cloud lying on the hills
+        Steam,            // cold air over open water at the end of the night: wisps a few metres high
+        Frontal,          // under the steady rain of a wet system, in cool air: rain and fog together
+    }
+
     /// <summary>One layer of cloud over a place.</summary>
     public struct CloudLayer
     {
@@ -41,10 +52,28 @@ namespace Keystone
         public float Rain;
         /// <summary>The share of it that falls as snow, 0 to 1.</summary>
         public float Snow;
+        /// <summary>
+        /// The share of it that is rain falling into air below freezing and freezing where it lands (glaze: freezing rain),
+        /// and the share that has frozen again on the way down and lands as ice pellets, each 0 to 1. With Snow they come
+        /// to no more than 1; what is left of 1 is plain rain. (Since Keystone 0.8; nothing from a weather mod that does
+        /// not know of them.)
+        /// </summary>
+        public float Freezing, Pellets;
+        /// <summary>Hail falling here now, 0 to 1 (how thickly), and the size of its stones across, millimetres. Apart from Rain: hail falls with rain or without. (Since Keystone 0.8.)</summary>
+        public float Hail, HailSize;
         /// <summary>How stormy, 0 to 1: thunderstorms within about twenty kilometres, and how strong.</summary>
         public float Storm;
         /// <summary>Fog at the ground, 0 to 1.</summary>
         public float Fog;
+        /// <summary>
+        /// What kind of fog; how deep it lies over the ground, metres (over the ground as it really is where one stands:
+        /// a weather mod's own map of the ground is coarse; nothing: not known, take the low layer's top); and whether
+        /// its droplets are colder than ice and freeze on what they touch (freezing fog: rime). (Since Keystone 0.8;
+        /// nothing from a weather mod that does not know of them.)
+        /// </summary>
+        public FogKind FogOf;
+        public float FogDeep;
+        public bool FogFreezes;
         /// <summary>Dust in the air, 0 to 1 (Duna's storms).</summary>
         public float Dust;
         /// <summary>How far one can see along the ground, in metres.</summary>

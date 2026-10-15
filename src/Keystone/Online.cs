@@ -11,11 +11,13 @@ namespace Keystone
 {
     /// <summary>
     /// What can be learnt online about the mods installed: whether a newer version is out, and what is new in it.
-    /// Off unless the player switches it on (Keystone's own setting "online"). Then, at most once a day for each mod,
+    /// On as installed since Keystone 0.8 (the owner asked that the mods fetch GitHub for new releases), and a switch
+    /// (Keystone's own setting "online"). Then, at most once a day for each mod,
     /// and one request at a time, it asks two kinds of public address, with plain GET requests that carry nothing about
     /// the player: the copy of a mod's .version file its makers keep online (the address its .version file or CKAN
     /// names, as KSP-AVC asks it), and GitHub's page of a repository's latest release. What it learns is kept in
-    /// GameData/Keystone/PluginData/online.json, and shown with each mod. It never downloads or installs a mod.
+    /// GameData/Keystone/PluginData/online.json, and shown with each mod. It downloads nothing itself: a mod's newest
+    /// release is fetched only when the player presses its Update button (Updater).
     /// Everything else in the window works the same with no network at all.
     /// </summary>
     public static class Online
@@ -51,6 +53,8 @@ namespace Keystone
             {
                 if (!(each.TryGetValue(one.Id, out object found) && found is Dictionary<string, object> learnt)) continue;
                 one.Latest = Text(learnt, "latest"); one.LatestNotes = Text(learnt, "notes"); one.LatestPage = Text(learnt, "page"); one.LatestFrom = Text(learnt, "from");
+                one.LatestZip = Text(learnt, "zip");
+                if (long.TryParse(Text(learnt, "zipBytes"), NumberStyles.Integer, CultureInfo.InvariantCulture, out long bytes)) one.LatestZipBytes = bytes;
                 if (long.TryParse(Text(learnt, "at"), NumberStyles.Integer, CultureInfo.InvariantCulture, out long ticks) && ticks > 0) one.LatestAt = new DateTime(ticks, DateTimeKind.Utc);
             }
             if (kept.TryGetValue("state", out object said) && said is string words && state.Length == 0) state = words;
@@ -68,7 +72,8 @@ namespace Keystone
                 {
                     if (one.LatestAt == default(DateTime)) continue;
                     s.Append(first ? "\n" : ",\n").Append("    ").Append(Json.Quote(one.Id)).Append(": { \"latest\": ").Append(Json.Quote(one.Latest)).Append(", \"from\": ").Append(Json.Quote(one.LatestFrom))
-                     .Append(", \"page\": ").Append(Json.Quote(one.LatestPage)).Append(", \"at\": \"").Append(one.LatestAt.Ticks.ToString(CultureInfo.InvariantCulture)).Append("\", \"notes\": ").Append(Json.Quote(one.LatestNotes)).Append(" }");
+                     .Append(", \"page\": ").Append(Json.Quote(one.LatestPage)).Append(", \"at\": \"").Append(one.LatestAt.Ticks.ToString(CultureInfo.InvariantCulture)).Append("\", \"notes\": ").Append(Json.Quote(one.LatestNotes))
+                     .Append(", \"zip\": ").Append(Json.Quote(one.LatestZip)).Append(", \"zipBytes\": \"").Append(one.LatestZipBytes.ToString(CultureInfo.InvariantCulture)).Append("\" }");
                     first = false;
                 }
                 s.Append("\n  }\n}\n");
@@ -105,7 +110,8 @@ namespace Keystone
             {
                 if (!Allowed) break;                                        // (switched off half way: stop)
                 state = "looking: " + (done + 1) + " of " + due.Count + " (" + one.Name + ")";
-                string latest = "", notes = "", page = "", from = "";
+                string latest = "", notes = "", page = "", from = "", zip = "";
+                long zipBytes = 0;
                 bool heard = false;
                 // Its .version file as its makers keep it online.
                 string remote = Address(one.Remote);
@@ -141,6 +147,26 @@ namespace Keystone
                                 if (latest.Length == 0 && tag.Length > 0) { latest = tag; from = "GitHub"; }
                                 notes = Notes(Text(release, "body"));
                                 page = Text(release, "html_url");
+                                // (its download, for Updater: the zip named after one of the mod's folders, or the only zip there is)
+                                if (release.TryGetValue("assets", out object assets) && assets is List<object> files)
+                                {
+                                    int zips = 0;
+                                    foreach (object f in files)
+                                    {
+                                        if (!(f is Dictionary<string, object> asset)) continue;
+                                        string name = Text(asset, "name"), url = Text(asset, "browser_download_url");
+                                        if (!name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) || !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) continue;
+                                        zips++;
+                                        bool named = one.Folders.Exists(folder => folder.Length > 0 && name.StartsWith(folder, StringComparison.OrdinalIgnoreCase));
+                                        if (named || zip.Length == 0)
+                                        {
+                                            zip = url;
+                                            long.TryParse(Text(asset, "size"), NumberStyles.Integer, CultureInfo.InvariantCulture, out zipBytes);
+                                            if (named) break;
+                                        }
+                                    }
+                                    if (zips > 1 && !one.Folders.Exists(folder => folder.Length > 0 && Path.GetFileName(zip).StartsWith(folder, StringComparison.OrdinalIgnoreCase))) { zip = ""; zipBytes = 0; }
+                                }
                                 heard |= tag.Length > 0;
                             }
                         }
@@ -153,6 +179,7 @@ namespace Keystone
                 if (heard)
                 {
                     one.Latest = Strip(latest); one.LatestNotes = notes; one.LatestPage = page; one.LatestFrom = from; one.LatestAt = DateTime.UtcNow;
+                    one.LatestZip = zip; one.LatestZipBytes = zipBytes;
                     if (one.Behind) newer++;
                 }
                 else failed++;

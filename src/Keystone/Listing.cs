@@ -47,6 +47,9 @@ namespace Keystone
         /// <summary>What was learnt online (see Online): the newest version, a few lines of what is new in it, its page, and when this was learnt.</summary>
         public string Latest = "", LatestNotes = "", LatestPage = "", LatestFrom = "";
         public DateTime LatestAt;
+        /// <summary>The newest release's download, if it has one on its GitHub page (a zip), and how big it is (see Updater).</summary>
+        public string LatestZip = "";
+        public long LatestZipBytes;
         /// <summary>Its libraries as the game has them (for whoever wants to know more: what they cost, for one).</summary>
         public readonly List<Assembly> Assemblies = new List<Assembly>();
 

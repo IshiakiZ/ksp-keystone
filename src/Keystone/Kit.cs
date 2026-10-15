@@ -5,7 +5,7 @@ using System.Reflection;
 using UnityEngine;
 
 #if !DEV
-[assembly: KSPAssembly("Keystone", 0, 7)]
+[assembly: KSPAssembly("Keystone", 0, 8)]
 #endif
 
 namespace Keystone
@@ -32,7 +32,7 @@ namespace Keystone
     /// </summary>
     public static class Kit
     {
-        public const string Version = "0.7.2";
+        public const string Version = "0.8.0";
 
         static readonly List<Mod> mods = new List<Mod>();
 
@@ -52,8 +52,8 @@ namespace Keystone
                 {
                     own = new Mod("Keystone", Version, null);
                     window = own.Hotkey("window", "Opens this window", KeyCode.K, true, "The key that opens and closes this window, wherever you are in the game. Click, then press the key you want (with the game's modifier key held, if it is to be with it).");
-                    online = own.Toggle("online", "Look for newer versions online", false,
-                        "Off as installed. On: about once a day, while this window is open, each mod's own address for its newest version is asked (the copy of its .version file its makers keep online, and its latest release on GitHub), one at a time, and the answers are kept in Keystone's folder. Nothing about you is sent; the sites see that this computer asked, as with any web page. Nothing is ever downloaded or installed.");
+                    online = own.Toggle("online", "Look for newer versions online", true,
+                        "On as installed. About once a day, while this window is open, each mod's own address for its newest version is asked (the copy of its .version file its makers keep online, and its latest release on GitHub), one at a time, and the answers are kept in Keystone's folder. Nothing about you is sent; the sites see that this computer asked, as with any web page. Nothing is downloaded unless you press a mod's Update button.");
                 }
                 return own;
             }

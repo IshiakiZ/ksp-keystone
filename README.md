@@ -18,8 +18,12 @@ Copy the `Keystone` folder from the download into your KSP's `GameData`. One cop
 * **Settings are kept** in `GameData/Keystone/PluginData/<mod>.cfg`. Deleting a file there puts that mod back as
   installed.
 * **What each mod costs:** a page that times every mod's work (it needs the Harmony mod).
-* **Newer versions** can be looked for online. That is off until you switch it on, and nothing is downloaded or
-  installed.
+* **Newer versions** are looked for on each mod's GitHub page about once a day (a switch turns it off). A mod with a
+  newer release gets an **Update** button: it fetches the release, checks it holds only that mod's folders, and puts it
+  in (on Windows when you close the game); the old version is kept in `Keystone/Replaced`. Mods installed by CKAN are
+  left to CKAN.
+
+![The list in the window: each mod with its state, the switch that looks for newer versions online, and when it last looked](src/Keystone/img/keystone-list.jpg)
 
 ## For mod authors
 
@@ -29,7 +33,7 @@ Keystone also has a lens and a film that any mod can use.
 
 ## Works on
 
-Windows 11 (Direct3D 11 and OpenGL) and Mac: tried. Linux: never run.
+Mac: tried. Windows 11 (Direct3D 11 and OpenGL): 0.7.1 tried; this version built for it, not run there. Linux: never run.
 
 **More:** [the long description](https://github.com/IshiakiZ/ksp-keystone/wiki/The-long-description) (everything in full, and what was
 tried on each system) and the rest of the [wiki](https://github.com/IshiakiZ/ksp-keystone/wiki).

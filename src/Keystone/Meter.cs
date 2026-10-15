@@ -236,6 +236,35 @@ namespace Keystone
             s.Append("\nmeter: ").Append(Other == null ? "none offered" : Other.Name + (Other.Works ? " (works)" : " (does not work: " + Other.Why + ")"));
             return s.ToString();
         }
+
+        /// <summary>(For the development build: a mod's switch set from outside, for turn-and-turn-about measuring: "Mod name|key|true or
+        /// false". It is written to the settings file as any change on the page is: set it back afterwards.)</summary>
+        public static string Flip(string how)
+        {
+            string[] w = (how ?? "").Split('|');
+            if (w.Length != 3) return "Mod name|key|true or false";
+            Mod m = Kit.Find(w[0]);
+            if (m == null) return "no mod " + w[0];
+            foreach (Setting s in m.Settings)
+                if (s.Key == w[1] && s is Toggle t) { t.Value = w[2] == "true"; return w[0] + " " + w[1] + " = " + t.Value; }
+            return "no switch " + w[1];
+        }
+
+        /// <summary>(For the development build: the meter worked from outside, as the window works it. "start", then "report"
+        /// (which stops it): each mod's cost, the dearest first.)</summary>
+        public static string Run(string how)
+        {
+            IMeter m = Best;
+            if (m == null) return "no meter: " + WhyNot;
+            if (how == "start") { m.Start(); return "measuring (" + m.Report + ")"; }
+            var s = new System.Text.StringBuilder();
+            s.Append("frame ").Append(m.Frame.ToString("F2")).Append(" ms; the measuring itself ").Append(m.Itself.ToString("F2")).Append(" ms; ").Append(m.Report);
+            foreach (Cost c in m.Costs)
+                s.Append("\n  ").Append((c.Who != null ? c.Who.Name : "(no mod)").PadRight(28)).Append(c.Ms.ToString("F2").PadLeft(7)).Append(" ms, worst ").Append(c.Worst.ToString("F1")).Append(", ").Append(c.Calls.ToString("F0")).Append(" calls")
+                 .Append(c.Bytes >= 0 ? ", " + Size((long)c.Bytes) + " made" : "");
+            m.Stop();
+            return s.ToString();
+        }
 #endif
     }
 

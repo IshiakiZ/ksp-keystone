@@ -10,10 +10,10 @@ On Windows only. Every shader of tools/shaderpack is turned into HLSL (port.py),
 (d3dcompiler_47.dll, which is part of Windows: nothing is installed), created once by Direct3D 11 itself as a check, and
 packed into the bundles the mods look for when the game runs on Direct3D:
 
-    src/VolumetricExplosions/Shaders/shaders-windows.bundle   the explosions' six: Volume, Enlarge, Layers, Mark, Shock, Shadow
+    src/VolumetricExplosions/Shaders/shaders-windows.bundle   the explosions' seven: Volume, Enlarge, Layers, Mark, Shock, Shadow, Motion
     src/Keystone/Shaders/lens-windows.bundle                   Keystone's lens
     src/NaturalLight/Shaders/light-windows.bundle             Natural Light's three: Shafts, Clean, Veil
-    src/NaturalWeather/Shaders/clouds-windows.bundle          Natural Weather's clouds: Clouds, CloudsOver, CloudShade
+    src/NaturalWeather/Shaders/clouds-windows.bundle          Natural Weather's: Clouds, CloudsOver, CloudShade, Wet, Drops
     src/NaturalOcean/Shaders/ocean-windows.bundle (and oceanfoam-, oceanweed-, oceanunder-)   Natural Ocean's four, one each
 
 Run it again after any change to a GLSL file (so after each `git pull origin main`): it makes every bundle afresh from the
@@ -49,10 +49,11 @@ from unityfile import Asset, Bundle, Writer, lz4_store  # noqa: E402
 # The bundles, each with the shaders in it, as the mods look for them (Addon.BuiltShader, Lens.OwnLens, OwnShader.Load,
 # Clouds.Load).
 BUNDLES = [
-    ("src/VolumetricExplosions/Shaders/shaders-windows.bundle", ["volume", "enlarge", "layers", "mark", "shock", "shadow"]),
+    ("src/VolumetricExplosions/Shaders/shaders-windows.bundle", ["volume", "enlarge", "layers", "mark", "shock", "shadow", "motion"]),
     ("src/Keystone/Shaders/lens-windows.bundle", ["lens"]),
     ("src/NaturalLight/Shaders/light-windows.bundle", ["shafts", "clean", "veil"]),
-    ("src/NaturalWeather/Shaders/clouds-windows.bundle", ["clouds", "cloudsover", "cloudshade"]),
+    # (and the rain's on the glass and the ground, and the drops' own picture of the water on the glass: Wet.LoadShader, 2026-10-13)
+    ("src/NaturalWeather/Shaders/clouds-windows.bundle", ["clouds", "cloudsover", "cloudshade", "wet", "drops"]),
     # (Natural Ocean looks for one bundle a shader, Sea.Load: listed 2026-10-11, compiled and seen in the game that evening.
     # What Direct3D wanted of them that no rule could see is in port.py's SPECIAL and OWN.)
     ("src/NaturalOcean/Shaders/ocean-windows.bundle", ["ocean"]),

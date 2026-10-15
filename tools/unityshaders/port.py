@@ -27,8 +27,8 @@ sys.path.insert(0, PACK)
 import make_bundle  # noqa: E402  (for each shader's name, textures and how it is blended)
 
 # Where each goes in the Unity project.
-FOLDER = {"volume": "VolumetricExplosions", "enlarge": "VolumetricExplosions", "layers": "VolumetricExplosions", "mark": "VolumetricExplosions", "shock": "VolumetricExplosions", "shadow": "VolumetricExplosions", "lens": "Keystone",
-          "shafts": "NaturalLight", "clean": "NaturalLight", "veil": "NaturalLight", "clouds": "NaturalWeather", "cloudsover": "NaturalWeather", "cloudshade": "NaturalWeather",
+FOLDER = {"volume": "VolumetricExplosions", "enlarge": "VolumetricExplosions", "layers": "VolumetricExplosions", "motion": "VolumetricExplosions", "mark": "VolumetricExplosions", "shock": "VolumetricExplosions", "shadow": "VolumetricExplosions", "lens": "Keystone",
+          "shafts": "NaturalLight", "clean": "NaturalLight", "veil": "NaturalLight", "clouds": "NaturalWeather", "cloudsover": "NaturalWeather", "cloudshade": "NaturalWeather", "wet": "NaturalWeather", "drops": "NaturalWeather",
           "ocean": "NaturalOcean", "oceanfoam": "NaturalOcean", "oceanweed": "NaturalOcean", "oceanunder": "NaturalOcean"}
 
 # What Unity's own headers already declare.
@@ -85,7 +85,7 @@ SPECIAL = [
     way = -1.0;
 #endif
     vs_TEXCOORD0 = vec2(in_POSITION0.x * 0.5 + 0.5, in_POSITION0.y * way * 0.5 + 0.5);"""),
-    (("cloudsover", "cloudshade", "veil", "oceanunder"), "vertex", "    vs_TEXCOORD0 = in_POSITION0.xy * 0.5 + 0.5;",
+    (("cloudsover", "cloudshade", "veil", "oceanunder", "wet"), "vertex", "    vs_TEXCOORD0 = in_POSITION0.xy * 0.5 + 0.5;",
      """    // (drawn into whatever the camera is drawing into, which may lie either way: as for the lens's second go, above; Natural
     // Light's veil and the sea's lens in the water the same)
     float way = 1.0;
@@ -99,8 +99,10 @@ SPECIAL = [
      "        if (AllZero(s00) && AllZero(s10) && AllZero(s01) && AllZero(s11)) continue;"),
     # (the sheet is laid over the part of the screen the camera's own projection gives; where Direct3D draws into a picture upside
     # down, the game's projection is turned over, and so must this be)
-    (("layers",), "vertex", "    gl_Position = vec4(mix(_VolSheet.xy, _VolSheet.zw, in_POSITION0.xy), 0.0, 1.0);",
-     "    vec2 corner = mix(_VolSheet.xy, _VolSheet.zw, in_POSITION0.xy);\n    gl_Position = vec4(corner.x, corner.y * _ProjectionParams.x, 0.0, 1.0);"),
+    # (vs_TEXCOORD0 stays as the screen is, taken before the turning over: the weather's pictures of the screen, which the
+    # sheet reads, lie that way on every system: see "clouds" and "cloudsover" above)
+    (("layers",), "vertex", "    gl_Position = vec4(at, 0.0, 1.0);",
+     "    gl_Position = vec4(at.x, at.y * _ProjectionParams.x, 0.0, 1.0);"),
     # The sea (Natural Ocean), 2026-10-11.
     # (The lens's map: the sea's innermost ring drawn once more from straight above into a small picture of the water's height, its
     # corners put by hand. A picture of the sea's own: on Direct3D its first row is its top, so the second axis is turned over, to
@@ -523,8 +525,11 @@ def program(which, header):
         out.append("                return Both(result, result1);\n            }")
     else:
         facing = ", bool isFront : SV_IsFrontFace" if re.search(r"\bgl_FrontFacing\b", uncommented(fragment["main"] + fragment["helpers"])) else ""
-        out.append("            float4 frag(v2f IN%s) : SV_Target\n            {\n                float4 result = float4(0.0, 0.0, 0.0, 0.0);" % facing)
-        out.append(indented(re.sub(r"\breturn;", "return result;", convert(fragment["main"], "fragment", outside, which in OWN)), "            "))
+        # (a program that writes its own depth, as drops.glsl does, gives it as a second output: SV_Depth)
+        depth = ", out float fragDepth : SV_Depth" if re.search(r"\bgl_FragDepth\b", uncommented(fragment["main"])) else ""
+        out.append("            float4 frag(v2f IN%s%s) : SV_Target\n            {\n                float4 result = float4(0.0, 0.0, 0.0, 0.0);" % (facing, depth))
+        if depth: out.append("                fragDepth = 0.0;")
+        out.append(indented(re.sub(r"\bgl_FragDepth\b", "fragDepth", re.sub(r"\breturn;", "return result;", convert(fragment["main"], "fragment", outside, which in OWN))), "            "))
         out.append("                return result;\n            }")
     return out, clash
 
@@ -559,8 +564,8 @@ def port(which):
 
 if __name__ == "__main__":
     asked = sys.argv[1:]
-    for name in asked or ["volume", "enlarge", "layers", "mark", "shock", "shadow", "lens", "shafts", "clean", "veil", "clouds", "cloudsover", "cloudshade",
-                          "ocean", "oceanfoam", "oceanweed", "oceanunder"]:
+    for name in asked or ["volume", "enlarge", "layers", "motion", "mark", "shock", "shadow", "lens", "shafts", "clean", "veil", "clouds", "cloudsover", "cloudshade", "wet",
+                          "ocean", "oceanfoam", "oceanweed", "oceanunder", "drops"]:
         # (a repository of one mod has that mod's shaders and not the others': those are passed over)
         if not asked and not os.path.exists(os.path.join(PACK, make_bundle.SHADERS[name]["code"])):
             print("left out: %s (tools/shaderpack/%s is not here)" % (name, make_bundle.SHADERS[name]["code"]))
