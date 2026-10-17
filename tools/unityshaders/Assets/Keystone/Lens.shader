@@ -128,7 +128,7 @@ Shader "Keystone/Lens"
                 // end up spread evenly over the whole disc)
                 float2 turn = float2(1.0, 0.0);
                 const float2x2 further = transpose(float2x2(-0.7373688, 0.6754903, -0.6754903, -0.7373688));
-                [loop] for (int n = 0; n < 96; n++)
+                { [loop] for (int n = 0; n < 96; n++)
                 {
                     if (radius > _LensFocus.z) break;
                     turn = mul(further, turn);
@@ -140,7 +140,7 @@ Shader "Keystone/Lens"
                     looks += 1.0;
                     if (d < here * 0.97) reached = max(reached, counts);
                     radius += _LensFocus.w / radius;
-                }
+                } }
                 return float4(sum / looks, max(smoothstep(0.6, 2.2, mine), reached));
             }
 
@@ -183,14 +183,14 @@ Shader "Keystone/Lens"
                     if (smear > _LensMove.z) went *= _LensMove.z / smear;
                     colour = ((float3)(0.0));
                     int looks = int(_LensMove.y);
-                    [loop] for (int n = 0; n < 16; n++)
+                    { [loop] for (int n = 0; n < 16; n++)
                     {
                         if (n >= looks) break;
                         // (each look a little differently placed from pixel to pixel and frame to frame, so that few looks show as grain and not as copies)
                         float2 along = went * ((float(n) + chance(FragCoord(IN.pos).xy + _LensFrame.x * 7.31)) / _LensMove.y - 0.5);
                         if (parted > 0.0) colour += float3(picture(red + along).r, picture(from + along).g, picture(blue + along).b);
                         else colour += picture(from + along);
-                    }
+                    } }
                     colour /= float(looks);
                 }
                 else if (parted > 0.0) colour = float3(picture(red).r, picture(from).g, picture(blue).b);

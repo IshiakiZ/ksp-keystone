@@ -247,6 +247,47 @@ def arguments(inner):
     return [a.strip() for a in out]
 
 
+def braced(text, start):
+    """Where the brace opened at text[start] is closed."""
+    depth = 0
+    for n in range(start, len(text)):
+        if text[n] == "{": depth += 1
+        elif text[n] == "}":
+            depth -= 1
+            if depth == 0: return n
+    raise SystemExit("an unclosed brace in: " + text[start:start + 60])
+
+
+def scoped_loops(text):
+    """GLSL keeps a loop's counter to the loop; HLSL lets it out into the block round it, where a later one of the same name is then
+    defined twice (clouds.glsl, 2026-10-15: `for (int k ...)` and after it `float k`). Each loop that declares its counter is put in
+    braces of its own, so that the counter ends with it, as in GLSL."""
+    out, pos = [], 0
+    pattern = re.compile(r"\[loop\] for \(\s*(?:int|uint|float)\s")
+    while True:
+        found = pattern.search(text, pos)
+        if not found:
+            out.append(text[pos:])
+            return "".join(out)
+        head = bracket(text, text.index("(", found.start()))
+        end = statement_end(text, head + 1)
+        out.append(text[pos:found.start()] + "{ " + text[found.start():head + 1] + scoped_loops(text[head + 1:end + 1]) + " }")
+        pos = end + 1
+
+
+def statement_end(text, n):
+    """Where the statement that begins at or after text[n] ends: a block, a loop or an if with what it governs, or a plain one."""
+    while text[n] in " \t\r\n": n += 1
+    if text[n] == "{": return braced(text, n)
+    found = re.match(r"(?:\[loop\]\s*)?(for|while|if)\s*\(", text[n:])
+    if not found: return text.index(";", n)
+    end = statement_end(text, bracket(text, n + found.end() - 1) + 1)
+    if found.group(1) == "if":
+        after = re.match(r"\s*else\b", text[end + 1:])
+        if after: end = statement_end(text, end + 1 + after.end())
+    return end
+
+
 def makers(text):
     """float3(x) with one thing in it is not allowed in HLSL: it becomes a cast. And a matrix made from numbers is made row by row there, column by column in GLSL."""
     pattern = re.compile(r"(?<![\w.@])((?:float|int|uint|bool)[234](?:x[234])?)\(")
@@ -394,6 +435,7 @@ def convert(text, stage, vectors={}, own=False):
     text = re.sub(r"\bSV_Target1\b", "result1", text)
     text = re.sub(r"\bvs_TEXCOORD(\d)\b", ("OUT" if stage == "vertex" else "IN") + r".vs_TEXCOORD\1", text)
     text = re.sub(r"(\n\s*)for \(", r"\1[loop] for (", text)
+    text = scoped_loops(text)
     for left in ("textureLod", "texelFetch", "textureSize", "gl_", "vec2", "vec3", "vec4", "mat2", "mat3", "mat4"):
         if re.search(r"(?<![\w.])" + re.escape(left) + r"\b", uncommented(text)): raise SystemExit("still GLSL after conversion: " + left)
     return text
@@ -429,6 +471,11 @@ def stage_of(text):
             if found: outs.append((found.group(3), found.group(2))); continue
             found = re.match(r"(float|vec[234]|int|bool) (\w+);", bare)
             if found: statics.append((found.group(2), found.group(1))); continue
+            # (one of the stage's own with a first value, several on one line, or a list, as clouds.glsl's heapsMiddle and heapsHalf
+            # and formRaw[2]: kept where it is, as static, since HLSL takes a variable outside a function for a uniform, which cannot
+            # be changed. 2026-10-15)
+            found = re.match(r"((?:float|int|uint|bool)|(?:[iu]?vec[234])|(?:mat[234]))\s+\w+\s*(?:\[\d+\]\s*)?[=,;]", bare)
+            if found: line = line.replace(found.group(1), "static " + found.group(1), 1)
         depth += bare.count("{") - bare.count("}")
         body.append(line)
     body = "\n".join(body)
@@ -462,6 +509,49 @@ def indented(text, by):
     return "\n".join((by + line if line.strip() and not line.lstrip().startswith("#") else line.lstrip() if line.lstrip().startswith("#") else line) for line in text.split("\n"))
 
 
+def texture_parameters(stage):
+    """A function that takes a texture (a sampler2D or sampler3D in GLSL) takes it in HLSL as the texture and its sampler: each such
+    parameter becomes two (map: Texture2D map, SamplerState samplermap, as SampleLod and its kin name a texture's sampler), and every
+    call hands on the sampler of the texture it names (_CloudMap: _CloudMap, sampler_CloudMap, as the uniforms' are declared). First
+    needed by clouds.glsl's mapSmooth (2026-10-15)."""
+    takes = {}
+
+    def definition(found):
+        params, new, at = arguments(found.group(3)), [], []
+        for k, p in enumerate(params):
+            texture = re.fullmatch(r"(?:in\s+)?sampler([23])D\s+(\w+)", p)
+            if texture:
+                new.append("Texture%sD %s, SamplerState sampler%s" % (texture.group(1), texture.group(2), texture.group(2)))
+                at.append(k)
+            else:
+                new.append(p)
+        if not at: return found.group(0)
+        takes[found.group(2)] = at
+        return "%s %s(%s)" % (found.group(1), found.group(2), ", ".join(new))
+
+    stage["helpers"] = re.sub(r"\b(\w+)\s+(\w+)\s*\(([^()]*\bsampler[23]D\b[^()]*)\)", definition, stage["helpers"])
+    for key in ("helpers", "main"):
+        text = stage[key]
+        for name, at in takes.items():
+            call, pos = re.compile(r"(?<![\w.])" + re.escape(name) + r"\s*\("), 0
+            while True:
+                found = call.search(text, pos)
+                if not found: break
+                open_at = found.end() - 1
+                close = bracket(text, open_at)
+                args = arguments(text[open_at + 1:close])
+                if any(a.startswith(("Texture2D ", "Texture3D ")) for a in args):
+                    pos = close + 1          # (the definition itself)
+                    continue
+                for k in sorted(at, reverse=True):
+                    if not re.fullmatch(r"\w+", args[k]): raise SystemExit("%s: a texture handed on as something other than a name: %s" % (name, args[k]))
+                    args[k:k + 1] = [args[k], "sampler" + args[k]]
+                new = "%s(%s)" % (name, ", ".join(args))
+                text = text[:found.start()] + new + text[close + 1:]
+                pos = found.start() + len(new)
+        stage[key] = text
+
+
 def program(which, header):
     """The program itself, as HLSL (the parts of what goes between CGPROGRAM's pragmas and ENDCG, to be joined by lines), with the
     given header first: Unity's own (UNITYCG) for the editor, or ours (OUTSIDE) for a compiler outside it. And the names that
@@ -483,6 +573,7 @@ def program(which, header):
     clash = [n for n in clash if n not in ("mul",)]
     for part in (vertex, fragment):
         for key in ("helpers", "main"): part[key] = renamed(part[key], clash)
+        texture_parameters(part)
 
     seen, declared = set(), []
     for stage in (vertex, fragment):

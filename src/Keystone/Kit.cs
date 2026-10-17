@@ -32,7 +32,7 @@ namespace Keystone
     /// </summary>
     public static class Kit
     {
-        public const string Version = "0.8.0";
+        public const string Version = "0.8.1";
 
         static readonly List<Mod> mods = new List<Mod>();
 

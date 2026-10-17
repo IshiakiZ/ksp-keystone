@@ -112,7 +112,7 @@ namespace Keystone
                 state = "looking: " + (done + 1) + " of " + due.Count + " (" + one.Name + ")";
                 string latest = "", notes = "", page = "", from = "", zip = "";
                 long zipBytes = 0;
-                bool heard = false;
+                bool heard = false, olderOnly = false;
                 // Its .version file as its makers keep it online.
                 string remote = Address(one.Remote);
                 if (remote.Length > 0)
@@ -126,6 +126,7 @@ namespace Keystone
                             if (Json.Read(ask.downloadHandler.text, ref at) is Dictionary<string, object> said)
                             {
                                 latest = VersionIn(said);
+                                if (latest.Length > 0 && !ForThisGame(said)) { latest = ""; olderOnly = true; }
                                 if (latest.Length > 0) { from = "its .version file online"; heard = true; }
                             }
                         }
@@ -143,12 +144,17 @@ namespace Keystone
                             int at = 0;
                             if (Json.Read(ask.downloadHandler.text, ref at) is Dictionary<string, object> release)
                             {
-                                string tag = Text(release, "tag_name");
+                                // (A release made before this line of the game came out is for an older game, and no update for
+                                // this one. The latest release of the old fork that CKAN's stock configs for EVE name, of 2019 for
+                                // KSP 1.8, was called newer than the configs CKAN had installed for EVE Redux.)
+                                bool forOlder = MadeBeforeThisGame(Text(release, "published_at"));
+                                if (forOlder) olderOnly = true;
+                                string tag = forOlder ? "" : Text(release, "tag_name");
                                 if (latest.Length == 0 && tag.Length > 0) { latest = tag; from = "GitHub"; }
-                                notes = Notes(Text(release, "body"));
-                                page = Text(release, "html_url");
+                                notes = forOlder ? "" : Notes(Text(release, "body"));
+                                page = forOlder ? "" : Text(release, "html_url");
                                 // (its download, for Updater: the zip named after one of the mod's folders, or the only zip there is)
-                                if (release.TryGetValue("assets", out object assets) && assets is List<object> files)
+                                if (!forOlder && release.TryGetValue("assets", out object assets) && assets is List<object> files)
                                 {
                                     int zips = 0;
                                     foreach (object f in files)
@@ -176,6 +182,8 @@ namespace Keystone
                     yield return new WaitForSecondsRealtime(Apart);
                 }
                 done++;
+                // (all that was found online is for older games: nothing newer for this one)
+                if (latest.Length == 0 && olderOnly) { latest = one.Version; from = "online, for older games only"; notes = ""; page = ""; heard = true; }
                 if (heard)
                 {
                     one.Latest = Strip(latest); one.LatestNotes = notes; one.LatestPage = page; one.LatestFrom = from; one.LatestAt = DateTime.UtcNow;
@@ -217,6 +225,41 @@ namespace Keystone
         }
 
         static bool Fine(UnityWebRequest ask) => !ask.isNetworkError && !ask.isHttpError && ask.downloadHandler != null && !string.IsNullOrEmpty(ask.downloadHandler.text);
+
+        /// <summary>
+        /// Whether a .version file online is for this game: by the newest game it names (KSP_VERSION_MAX, else KSP_VERSION),
+        /// by major and minor version. A newer version for an older game is no update for this one, as KSP-AVC has it.
+        /// </summary>
+        static bool ForThisGame(Dictionary<string, object> said)
+        {
+            object named = said.TryGetValue("KSP_VERSION_MAX", out object max) ? max : said.TryGetValue("KSP_VERSION", out object exact) ? exact : null;
+            int major = -1, minor = 0;
+            if (named is string text)
+            {
+                string[] t = text.Trim().Split('.');
+                if (!int.TryParse(t[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out major)) major = -1;
+                if (t.Length > 1) int.TryParse(t[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out minor);
+            }
+            else if (named is Dictionary<string, object> parts)
+            {
+                if (!int.TryParse(Text(parts, "MAJOR"), NumberStyles.Integer, CultureInfo.InvariantCulture, out major)) major = -1;
+                int.TryParse(Text(parts, "MINOR"), NumberStyles.Integer, CultureInfo.InvariantCulture, out minor);
+            }
+            if (major < 0) return true;
+            return major * 1000 + minor >= Versioning.version_major * 1000 + Versioning.version_minor;
+        }
+
+        /// <summary>
+        /// Whether a release was made before this line of the game came out (1.12.0: 24 June 2021; 1.11.0: 17 December 2020):
+        /// such a release is for an older game. A GitHub release says nothing of the games it is for; when it was made, it does.
+        /// </summary>
+        static bool MadeBeforeThisGame(string published)
+        {
+            if (!DateTime.TryParse(published, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out DateTime made)) return false;
+            DateTime began = Versioning.version_major == 1 && Versioning.version_minor == 12 ? new DateTime(2021, 6, 24, 0, 0, 0, DateTimeKind.Utc)
+                : Versioning.version_major == 1 && Versioning.version_minor == 11 ? new DateTime(2020, 12, 17, 0, 0, 0, DateTimeKind.Utc) : DateTime.MinValue;
+            return made < began;
+        }
 
         static string VersionIn(Dictionary<string, object> said)
         {
@@ -274,6 +317,9 @@ namespace Keystone
             Look(Host.Instance, true);
             return "looking at " + pointed + " local .version files as if online";
         }
+
+        /// <summary>(For the development build: what the window's "Look now" does, from outside.)</summary>
+        public static string LookNow() { lookedNowAt = -1000f; Look(Host.Instance, true); return Allowed ? "looking" : "not allowed: the online switch is off"; }
 
         /// <summary>(For the development build: after TryOffline, the switch off again, the real addresses back, and what was learnt forgotten.)</summary>
         public static string Forget()

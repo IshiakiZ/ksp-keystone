@@ -20,7 +20,8 @@ WHERE IT WORKS
   Made and tried on a Mac, and tried on Windows 11 (on the game's own Direct3D 11, and
   on OpenGL). What 0.7.2 changed (how the window is dragged, and its hold on the wheel
   while the pointer is over it) and what 0.8.0 added (more that a weather mod can say:
-  freezing rain, ice pellets, hail, kinds of fog) have been tried on the Mac only: the
+  freezing rain, ice pellets, hail, kinds of fog) and what 0.8.1 put right (no release for an
+  older game called newer) have been tried on the Mac only: the
   same code, with nothing in it that differs by system. Nobody has run it on Linux yet.
 
 Everything else: https://github.com/IshiakiZ/ksp-keystone
