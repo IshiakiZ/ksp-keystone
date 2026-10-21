@@ -46,6 +46,7 @@ namespace KeystoneTUFX
 
         public void Use(Camera camera, Look look)
         {
+            if (look.open > 0.02f) Lens.Smears();
             if (volume == null) Begin();
             depth.focusDistance.Override(look.focus);
             depth.focalLength.Override(look.focal);

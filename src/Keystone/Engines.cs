@@ -120,6 +120,43 @@ namespace Keystone
         /// </summary>
         public static bool Mouth(Part part, Transform nozzle, IList<Transform> all, float guess, out float radius, out float rim, bool whole = false)
         {
+            // (each nozzle measured once for all the mods that ask, the flames and the smoke: reading a model is a few milliseconds,
+            // and it was done at the moment the engine first burned, by each of them)
+            if (!whole && nozzle != null && measured.TryGetValue(nozzle, out Measured m) && m.Guess == guess) { radius = m.Radius; rim = m.Rim; return m.Ok; }
+            bool ok = Measure(part, nozzle, all, guess, out radius, out rim, whole);
+            if (!whole && nozzle != null)
+            {
+                if (measured.Count > 4000) Tidy();
+                measured[nozzle] = new Measured { Guess = guess, Radius = radius, Rim = rim, Ok = ok };
+            }
+            return ok;
+        }
+
+        struct Measured { public float Guess, Radius, Rim; public bool Ok; }
+        static readonly Dictionary<Transform, Measured> measured = new Dictionary<Transform, Measured>();
+
+        static void Tidy()
+        {
+            var gone = new List<Transform>();
+            foreach (Transform t in measured.Keys) if (t == null) gone.Add(t);
+            foreach (Transform t in gone) measured.Remove(t);
+            if (measured.Count > 4000) measured.Clear();
+        }
+
+        /// <summary>The part a piece of a model belongs to: the nearest part up from it (by hand: Unity's own way finds none in a part that
+        /// is only a pattern, whose objects are switched off).</summary>
+        static Part OwnerOf(Transform t)
+        {
+            for (; t != null; t = t.parent)
+            {
+                Part p = t.GetComponent<Part>();
+                if (p != null) return p;
+            }
+            return null;
+        }
+
+        static bool Measure(Part part, Transform nozzle, IList<Transform> all, float guess, out float radius, out float rim, bool whole)
+        {
             radius = guess; rim = 0f;
             Vector3 from = nozzle.position, along = nozzle.forward;
             // (what is this nozzle's and not its neighbour's: within reach of its line)
@@ -148,6 +185,9 @@ namespace Keystone
                 Mesh mesh = filter.sharedMesh;
                 Renderer drawn = filter.GetComponent<Renderer>();
                 if (mesh == null || !mesh.isReadable || drawn == null || !drawn.enabled) continue;
+                // (the part's own model, and not the parts hung on it, which are within its object too: a decoupler under an engine
+                // and the whole stage below it, which a nozzle measured on the pad took for its bell; since 2026-10-18)
+                if (OwnerOf(filter.transform) != part) continue;
                 // (the engine itself is solid: flames, glows and such that others have hung on it are not)
                 Material m = drawn.sharedMaterial;
                 if (m == null || m.renderQueue >= 2500 || (m.shader != null && m.shader.name.StartsWith("Waterfall", StringComparison.Ordinal))) continue;
@@ -178,6 +218,67 @@ namespace Keystone
             if (widest < guess * 0.2f || widest > guess * 2.2f || far < -guess * 4f || far > guess * 10f) return false;
             radius = widest; rim = far;
             return true;
+        }
+
+        /// <summary>
+        /// Set by a mod that measures the nozzles of the craft being flown (Mouth) as its engines first burn (the flames, the
+        /// smoke): they are then measured ahead, from a few seconds into the flight, an engine a frame (Keystone's Host calls
+        /// Ahead), so that a lift-off is not held up by it. Not the engines whose model moves before they fire (a bell that
+        /// unfolds, an animated part): those are measured as they first burn, as before.
+        /// </summary>
+        public static bool MeasureAhead;
+
+        static Vessel aheadOf;
+        static int aheadParts;
+        static float aheadFrom;
+        static readonly List<Part> aheadQueue = new List<Part>();
+
+        /// <summary>(Keystone's Host, once a frame.) The craft being flown's nozzles measured ahead of time, an engine a frame.</summary>
+        internal static void Ahead()
+        {
+            if (!MeasureAhead || !HighLogic.LoadedSceneIsFlight || !FlightGlobals.ready) return;
+            Vessel v = FlightGlobals.ActiveVessel;
+            if (v == null || v.packed || v.parts == null) return;
+            if (v != aheadOf || v.parts.Count != aheadParts)
+            {
+                aheadOf = v; aheadParts = v.parts.Count; aheadFrom = Time.time + 2f;
+                aheadQueue.Clear();
+                foreach (Part p in v.parts) if (p != null && p.FindModuleImplementing<ModuleEngines>() != null) aheadQueue.Add(p);
+                return;
+            }
+            if (aheadQueue.Count == 0 || Time.time < aheadFrom) return;
+            Part part = aheadQueue[aheadQueue.Count - 1];
+            aheadQueue.RemoveAt(aheadQueue.Count - 1);
+            if (part == null || Moves(part)) return;
+            try
+            {
+                foreach (ModuleEngines engine in part.FindModulesImplementing<ModuleEngines>())
+                {
+                    IList<Transform> all = engine.thrustTransforms;
+                    if (all == null) continue;
+                    for (int n = 0; n < all.Count; n++)
+                    {
+                        Transform nozzle = all[n];
+                        if (nozzle == null || !nozzle.gameObject.activeInHierarchy) continue;
+                        // (the share and the guess as the flames and the smoke make them, so that what is kept is what they ask for)
+                        float share = engine.thrustTransformMultipliers != null && n < engine.thrustTransformMultipliers.Count ? engine.thrustTransformMultipliers[n] : 1f / all.Count;
+                        Mouth(part, nozzle, all, Guess(engine, share), out float radius, out float rim);
+                    }
+                }
+            }
+            catch (Exception) { }
+        }
+
+        /// <summary>Whether a part's model moves before its engine fires: a bell that unfolds, or anything else animated by the part.</summary>
+        static bool Moves(Part part)
+        {
+            foreach (PartModule m in part.Modules)
+            {
+                if (m == null) continue;
+                string kind = m.GetType().Name;
+                if (kind.IndexOf("Deploy", StringComparison.Ordinal) >= 0 || m is ModuleAnimateGeneric) return true;
+            }
+            return false;
         }
 
         /// <summary>

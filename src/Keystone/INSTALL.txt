@@ -4,7 +4,8 @@ for Kerbal Space Program 1.12.x
 The base a family of small mods stands on: one window that lists every mod installed (the
 mods of this family with their switches and settings, every other with what can be known of
 it), settings that are kept between runs, keys you can change, a page of what each mod costs,
-and a lens of its own (depth of field, motion blur, grain) for the mods that film.
+and a lens of its own (depth of field, motion blur, grain) for the mods that film. From
+0.9.0: a mod's errors on its row, every mod's keys in one list, and settings kept as sets.
 
 INSTALL
   Copy the Keystone folder in this download into your KSP's GameData folder. One
@@ -18,10 +19,8 @@ USE
 
 WHERE IT WORKS
   Made and tried on a Mac, and tried on Windows 11 (on the game's own Direct3D 11, and
-  on OpenGL). What 0.7.2 changed (how the window is dragged, and its hold on the wheel
-  while the pointer is over it) and what 0.8.0 added (more that a weather mod can say:
-  freezing rain, ice pellets, hail, kinds of fog) and what 0.8.1 put right (no release for an
-  older game called newer) have been tried on the Mac only: the
-  same code, with nothing in it that differs by system. Nobody has run it on Linux yet.
+  on OpenGL): 0.9.0 run there on 2026-10-20, its motion pass for the far scene built for
+  Direct3D and loaded, its in-game update tried; its window not tried there. Nobody has
+  run it on Linux yet.
 
 Everything else: https://github.com/IshiakiZ/ksp-keystone

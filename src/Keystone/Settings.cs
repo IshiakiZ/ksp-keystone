@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
 
@@ -23,6 +24,16 @@ namespace Keystone
 
         internal abstract void Read(string text);
         internal abstract string Write();
+
+        /// <summary>Set from text as the player would set it: kept, and told to whoever listens. Whether it changed.</summary>
+        internal bool Apply(string text)
+        {
+            string was = Write();
+            try { Read(text); } catch (Exception) { return false; }
+            if (Write() == was) return false;
+            Touch();
+            return true;
+        }
         internal abstract void Reset();
         /// <summary>Whether it is as it is when first installed.</summary>
         internal abstract bool AsInstalled { get; }
@@ -381,20 +392,74 @@ namespace Keystone
             bool choosing = Choosing == this;
             if (GUILayout.Button(new GUIContent(choosing ? "press a key" : Shown, choosing ? "Press the key, with " + ModifierName + " held if it is to be with it. Esc: leave it as it was; Backspace: no key." : Hint ?? ""), GUILayout.Width(120f)))
                 Choosing = choosing ? null : this;
-            string clash = Clash();
+            string clash = Clash() ?? GameClash();
             if (clash != null) GUILayout.Label("<color=#e0a040>also " + clash + "</color>", Host.Small);
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
         }
 
+        /// <summary>
+        /// (Since 0.9.0.) One of the game's own keys that is this one, as the player has them in its settings (its bindings: the
+        /// map, the staging, the camera...), in words; nothing if none is. With the game's modifier key held it is taken to be
+        /// clear of them (the game's own keys are bound without it). Looked up afresh every few seconds.
+        /// </summary>
+        internal string GameClash() => GameClash(code, modifier);
+
+        /// <summary>The same for any key (a mod's fixed one).</summary>
+        internal static string GameClash(KeyCode code, bool modifier)
+        {
+            if (code == KeyCode.None || modifier) return null;
+            Bindings();
+            foreach (KeyValuePair<KeyCode, string> one in gameKeys) if (one.Key == code) return "the game's " + one.Value;
+            return null;
+        }
+
+        /// <summary>A key as the player would say it ("Option C", "Page Up").</summary>
+        internal static string Spoken(KeyCode code, bool modifier) => code == KeyCode.None ? "none" : (modifier ? ModifierName + " " : "") + Say(code);
+
+        static readonly List<KeyValuePair<KeyCode, string>> gameKeys = new List<KeyValuePair<KeyCode, string>>();
+        static float gameKeysAt = -100f;
+
+        static void Bindings()
+        {
+            if (Time.realtimeSinceStartup - gameKeysAt < 3f) return;
+            gameKeysAt = Time.realtimeSinceStartup;
+            gameKeys.Clear();
+            try
+            {
+                foreach (System.Reflection.FieldInfo f in typeof(GameSettings).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
+                {
+                    if (f.FieldType != typeof(KeyBinding)) continue;
+                    var b = f.GetValue(null) as KeyBinding;
+                    if (b == null) continue;
+                    string name = f.Name.Replace('_', ' ').ToLowerInvariant();
+                    if (b.primary != null && b.primary.code != KeyCode.None) gameKeys.Add(new KeyValuePair<KeyCode, string>(b.primary.code, name));
+                    if (b.secondary != null && b.secondary.code != KeyCode.None) gameKeys.Add(new KeyValuePair<KeyCode, string>(b.secondary.code, name));
+                }
+            }
+            catch (Exception) { }
+        }
+
         /// <summary>Another key of any mod's that is the same as this one, in words (nothing if there is none).</summary>
-        internal string Clash()
+        internal string Clash() => Clash(code, modifier, Owner, this, -1);
+
+        /// <summary>
+        /// (Since 0.9.0.) Another key of any mod's, a setting or one it reads by itself (Mod.Uses), that is the same as this one, in
+        /// words; nothing if there is none. `self` and `selfFixed` say which key is being asked about, to leave it out.
+        /// </summary>
+        internal static string Clash(KeyCode code, bool modifier, Mod owner, Setting self, int selfFixed)
         {
             if (code == KeyCode.None) return null;
             foreach (Mod mod in Kit.All())
+            {
                 foreach (Setting setting in mod.Settings)
-                    if (setting != this && setting is Hotkey other && other.code == code && other.modifier == modifier)
-                        return (mod == Owner ? "" : mod.Name + ": ") + other.Label;
+                    if (setting != self && setting is Hotkey other && other.code == code && other.modifier == modifier)
+                        return (mod == owner ? "" : mod.Name + ": ") + other.Label;
+                List<Mod.FixedKey> keys = mod.FixedKeys;
+                for (int n = 0; n < keys.Count; n++)
+                    if ((mod != owner || n != selfFixed) && keys[n].Code == code && keys[n].Modifier == modifier)
+                        return (mod == owner ? "" : mod.Name + ": ") + keys[n].Does;
+            }
             return null;
         }
     }

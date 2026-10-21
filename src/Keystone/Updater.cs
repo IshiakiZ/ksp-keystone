@@ -204,16 +204,28 @@ namespace Keystone
                 int pid = Process.GetCurrentProcess().Id;
                 var s = new StringBuilder();
                 s.Append("@echo off\r\n");
+                // (the script is written as UTF-8 and cmd is told so: read in the console's old code page, as it would be, a folder
+                // with a letter outside English in its name, the game's or a mod's, is not found. 2026-10-18, the PC)
+                s.Append("chcp 65001 >nul\r\n");
                 s.Append("rem Keystone: mods brought up to their newest releases, put in now that the game has closed.\r\n");
                 s.Append(":wait\r\n");
                 s.Append("tasklist /FI \"PID eq ").Append(pid).Append("\" 2>nul | find \"").Append(pid).Append("\" >nul && (timeout /t 1 /nobreak >nul & goto wait)\r\n");
+                int k = 0;
                 foreach (string[] w in swaps)
                 {
                     string fresh = w[0], place = w[1], aside = w[2];
                     s.Append("if not exist \"").Append(Path.GetDirectoryName(aside)).Append("\" mkdir \"").Append(Path.GetDirectoryName(aside)).Append("\"\r\n");
-                    s.Append("if exist \"").Append(place).Append("\" move \"").Append(place).Append("\" \"").Append(aside).Append("\" >nul\r\n");
+                    // (The old folder aside first, tried for ten seconds: a virus scanner or a backup may hold one of its files a moment.
+                    // If it cannot be moved, the new one is not put in: moved to where a folder still stands, it goes inside it, and the
+                    // game loads both copies of the mod (seen on the PC, 2026-10-18, with a file of the old folder held open). It waits in
+                    // Keystone/Updates, and the mod's page offers the update again at the next start.)
+                    s.Append("for /l %%i in (1,1,10) do if exist \"").Append(place).Append("\" (move \"").Append(place).Append("\" \"").Append(aside).Append("\" >nul 2>&1 & if exist \"").Append(place).Append("\" timeout /t 1 /nobreak >nul)\r\n");
+                    s.Append("if exist \"").Append(place).Append("\" goto kept").Append(k).Append("\r\n");
                     s.Append("move \"").Append(fresh).Append("\" \"").Append(place).Append("\" >nul\r\n");
                     s.Append("if exist \"").Append(Path.Combine(aside, "PluginData")).Append("\" robocopy \"").Append(Path.Combine(aside, "PluginData")).Append("\" \"").Append(Path.Combine(place, "PluginData")).Append("\" /E /XC /XN /XO >nul\r\n");
+                    // (the staging folder, empty once its last folder has gone in, as the Mac's way leaves none)
+                    s.Append("rd \"").Append(Path.GetDirectoryName(fresh)).Append("\" 2>nul\r\n");
+                    s.Append(":kept").Append(k++).Append("\r\n");
                 }
                 s.Append("del \"%~f0\"\r\n");
                 Directory.CreateDirectory(Updates);

@@ -7,7 +7,7 @@ namespace Keystone
     /// What the film in a camera, and the way it is developed, do to the picture once the game has drawn
     /// it: how bright it comes out, what happens to what is brighter than white, how strong its contrast and
     /// its colours are, and the glow round whatever is very bright. A mod works these out from its own
-    /// settings and asks for them every frame (see Film).
+    /// settings and asks for them every frame (see Film). (A field added here goes into KeystoneTUFX's TufxFilm.Same too.)
     /// </summary>
     public struct Grade
     {

@@ -14,9 +14,12 @@ Copy the `Keystone` folder from the download into your KSP's `GameData`. One cop
 ## Use
 
 * **The window** opens from the keystone button on the game's toolbar, or with Alt-K (Option-K on a Mac), in every
-  scene. Click a mod for its settings.
+  scene. Click a mod for its settings. Its lower right corner makes it wider and its list longer; its place and size are
+  kept. A mod whose own code has logged errors says so on its row ("2 errors"), the last one in its hint.
 * **Settings are kept** in `GameData/Keystone/PluginData/<mod>.cfg`. Deleting a file there puts that mod back as
-  installed.
+  installed. On Keystone's own page every mod's settings can be **kept as a set** under a name and put back later (to
+  try a look, or to give one to a friend: the files are in `PluginData/Sets/`).
+* **Keys:** a page with every mod's keys in one list, and any that are the same as another mod's or the game's.
 * **What each mod costs:** a page that times every mod's work (it needs the Harmony mod).
 * **Newer versions** are looked for on each mod's GitHub page about once a day (a switch turns it off). A mod with a
   newer release gets an **Update** button: it fetches the release, checks it holds only that mod's folders, and puts it
@@ -33,7 +36,8 @@ Keystone also has a lens and a film that any mod can use.
 
 ## Works on
 
-Mac: tried. Windows 11 (Direct3D 11 and OpenGL): 0.7.1 tried; this version built for it, not run there. Linux: never run.
+Mac: tried. Windows 11 (Direct3D 11 and OpenGL): this version run (2026-10-20: its motion beyond the near camera built for Direct3D and
+loaded), its in-game update tried; its window not tried there. Linux: never run.
 
 **More:** [the long description](https://github.com/IshiakiZ/ksp-keystone/wiki/The-long-description) (everything in full, and what was
 tried on each system) and the rest of the [wiki](https://github.com/IshiakiZ/ksp-keystone/wiki).

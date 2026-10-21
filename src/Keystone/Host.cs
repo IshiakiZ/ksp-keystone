@@ -20,9 +20,12 @@ namespace Keystone
         public static Host Instance { get; private set; }
 
         public const float LabelWidth = 150f, NumberWidth = 78f;
-        const float Width = 440f, Box = 26f;
+        const float Box = 26f;
+        // (since 0.9.0 as wide as the player has made it, by the grip at its corner, and kept with its place: see Kept)
+        static float Width = 440f;
+        const float Narrowest = 380f, Widest = 960f;
         /// <summary>How wide a page's settings may be, beside the bar it scrolls by.</summary>
-        internal const float PageWide = Width - 44f;
+        internal static float PageWide => Width - 44f;
         const string Lock = "KeystoneWindow", TypingLock = "KeystoneTyping";
         /// <summary>What the name of every box that can be typed in begins with (see Typed): while one of them has the keyboard, the game's own keys are held off.</summary>
         public const string TypedName = "keystone:";
@@ -32,6 +35,8 @@ namespace Keystone
 
         bool open, typing;
         bool carried; Vector2 carriedBy;                 // the window is held by its top edge, and where on it the pointer has hold
+        bool sizing; Vector2 sizedFrom; float sizedWide, sizedTall;   // (since 0.9.0) the window is held by its grip, being made larger or smaller
+        float tall;                                      // how tall the part that scrolls is to be, as the player made it (nought: as tall as suits the screen)
         Listed shown;                                    // the mod whose page is open (nothing: the list)
         Listed wanted; bool going;                       // where a click asked to go: gone to at the start of the next drawing (a page must not change half way through one)
         int filter, filterWanted;                        // 0 every mod, 1 those with settings here, 2 those with a newer version out
@@ -44,6 +49,8 @@ namespace Keystone
         int measure;                                     // begin measuring (1) or end it (-1), in the next Update
         /// <summary>The page of what each mod costs (not a mod: a place in the window).</summary>
         static readonly Listed CostsPage = new Listed { Id = ":costs", Name = "What each mod costs" };
+        /// <summary>(Since 0.9.0.) The page of every mod's keys (not a mod: a place in the window).</summary>
+        static readonly Listed KeysPage = new Listed { Id = ":keys", Name = "Every mod's keys" };
         ApplicationLauncherButton button;
         Texture2D icon;
 
@@ -117,6 +124,10 @@ namespace Keystone
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             DontDestroyOnLoad(gameObject);
+            drawing = gameObject.AddComponent<Drawing>();
+            drawing.host = this;
+            drawing.enabled = false;
+            Kept(true);
             Camera.onPreCull += BeforeDrawing;
             Kit.OnlineSwitch.Changed += OnlineChanged;
         }
@@ -133,7 +144,13 @@ namespace Keystone
         {
             if (filmed == Time.frameCount) return;
             filmed = Time.frameCount;
+#if DEV
+            long began = System.Diagnostics.Stopwatch.GetTimestamp();
             Film.Apply();
+            ownFilm += System.Diagnostics.Stopwatch.GetTimestamp() - began;
+#else
+            Film.Apply();
+#endif
         }
 
         void OnDestroy()
@@ -154,13 +171,46 @@ namespace Keystone
             Updater.Closing();
         }
 
+        /// <summary>
+        /// (Since 0.9.0.) What the window is drawn from: a component of its own, switched on only while the window is open. The game
+        /// calls every switched-on component's drawing for each event of its interface, several a frame (laying out, painting, each
+        /// key and move of the pointer), and a shut window was still called for all of them, to say it had nothing to draw.
+        /// </summary>
+        sealed class Drawing : MonoBehaviour
+        {
+            internal Host host;
+#if DEV
+            void OnGUI()
+            {
+                long began = System.Diagnostics.Stopwatch.GetTimestamp();
+                if (host != null) host.Draw();
+                ownDraw += System.Diagnostics.Stopwatch.GetTimestamp() - began;
+                ownDraws++;
+            }
+#else
+            void OnGUI() { if (host != null) host.Draw(); }
+#endif
+        }
+        Drawing drawing;
+
         void Update()
         {
+#if DEV
+            long began = System.Diagnostics.Stopwatch.GetTimestamp();
+            try { Work(); }
+            finally { ownUpdate += System.Diagnostics.Stopwatch.GetTimestamp() - began; }
+        }
+
+        void Work()
+        {
+#endif
+            if (drawing != null) { bool shows = open && Kit.Mods.Count > 0; if (drawing.enabled != shows) drawing.enabled = shows; }
             for (int n = 0; n < Kit.Mods.Count; n++) Kit.Mods[n].SaveIfDue();
             Kit.Own.SaveIfDue();
             bool loading = HighLogic.LoadedScene == GameScenes.LOADING || HighLogic.LoadedScene == GameScenes.LOADINGBUFFER;
             Pointer(open && !loading && Kit.Mods.Count > 0 && drawnHigh > 0f);
             if (loading) return;
+            Engines.Ahead();
             if (Kit.WindowKey.Pressed) Open = !open;
             // (measuring is begun and ended here, outside the window's drawing: setting it up wraps that drawing's own methods too)
             if (measure != 0)
@@ -182,7 +232,7 @@ namespace Keystone
             }
         }
 
-        void OnGUI()
+        void Draw()
         {
             if (!open || Kit.Mods.Count == 0) return;
             if (HighLogic.LoadedScene == GameScenes.LOADING || HighLogic.LoadedScene == GameScenes.LOADINGBUFFER) return;
@@ -234,13 +284,20 @@ namespace Keystone
         {
             float scale = UiScale;
             Vector2 pointer = PointerAt();
-            if (carried && (!shows || !Input.GetMouseButton(0))) carried = false;
+            if (carried && (!shows || !Input.GetMouseButton(0))) { carried = false; Keep(); }
+            if (sizing && (!shows || !Input.GetMouseButton(0))) { sizing = false; Keep(); }
+            if (sizing)
+            {
+                float high = Screen.height / scale;
+                Width = Mathf.Clamp(sizedWide + (pointer.x - sizedFrom.x), Narrowest, Mathf.Min(Widest, Screen.width / scale - window.x));
+                tall = Mathf.Clamp(sizedTall + (pointer.y - sizedFrom.y), 110f, Mathf.Max(110f, high - 12f - chrome - window.y));
+            }
             if (carried)
             {
                 window.x = Mathf.Clamp(pointer.x - carriedBy.x, 0f, Mathf.Max(0f, Screen.width / scale - Width));
                 window.y = Mathf.Clamp(pointer.y - carriedBy.y, 0f, Mathf.Max(0f, Screen.height / scale - Mathf.Min(drawnHigh, Screen.height / scale)));
             }
-            bool over = shows && (carried || new Rect(window.x, window.y, Width, drawnHigh).Contains(pointer));
+            bool over = shows && (carried || sizing || new Rect(window.x, window.y, Width, drawnHigh).Contains(pointer));
             // (asked of the game itself, not remembered: the game lets every hold go at times, from its pause menu for one)
             bool held = InputLockManager.lockStack.ContainsKey(Lock);
             if (over && !held) InputLockManager.SetControlLock(ControlTypes.CAMERACONTROLS | ControlTypes.KSC_ALL | ControlTypes.EDITOR_SOFT_LOCK, Lock);
@@ -292,15 +349,15 @@ namespace Keystone
                     Hotkey.Choosing = null;
                     if (GUI.GetNameOfFocusedControl() != SearchName) GUIUtility.keyboardControl = 0;
                 }
-                if (shown != null && shown != CostsPage && !Listing.All.Contains(shown)) shown = Find(shown.Id);
+                if (shown != null && shown != CostsPage && shown != KeysPage && !Listing.All.Contains(shown)) shown = Find(shown.Id);
                 filter = filterWanted;
                 search = searchTyped;
                 float high = Screen.height / UiScale;
-                room = Mathf.Max(110f, Mathf.Min(high * 0.62f, high - 12f - chrome));
+                room = Mathf.Max(110f, Mathf.Min(tall > 0f ? tall : high * 0.62f, high - 12f - chrome));
             }
             try
             {
-                if (shown == null) List(); else if (shown == CostsPage) Costs(); else Page(shown);
+                if (shown == null) List(); else if (shown == CostsPage) Costs(); else if (shown == KeysPage) Keys(); else Page(shown);
             }
             catch (ExitGUIException) { throw; }
             catch (Exception ex) { GUILayout.Label(ex.GetType().Name + ": " + ex.Message, Small); }
@@ -325,6 +382,74 @@ namespace Keystone
                 carriedBy = PointerAt() - new Vector2(window.x, window.y);
                 carried = true;
             }
+            // (Since 0.9.0.) Made larger or smaller by the grip in its lower right corner: wider, and its list or page taller.
+            if (drawnHigh > 40f)
+            {
+                Rect grip = new Rect(Width - 19f, drawnHigh - 19f, 17f, 17f);
+                if (e.type == EventType.Repaint) GUI.DrawTexture(grip, GripMark());
+                GUI.Label(grip, new GUIContent("", "Drag to make the window wider or narrower, taller or shorter."));
+                if (pressed && grip.Contains(e.mousePosition))
+                {
+                    sizing = true; sizedFrom = PointerAt(); sizedWide = Width; sizedTall = room;
+                    e.Use();
+                }
+            }
+        }
+
+        /// <summary>
+        /// (Since 0.9.0.) Where the window is and how large, kept from one game to the next: in Keystone's folder, in a file of its
+        /// own (not among the settings: nothing to set by hand), written when the player lets go of it.
+        /// </summary>
+        void Kept(bool read)
+        {
+            string path = Kit.Folder + "window.cfg";
+            try
+            {
+                if (read)
+                {
+                    if (!System.IO.File.Exists(path)) return;
+                    ConfigNode n = ConfigNode.Load(path);
+                    if (n == null) return;
+                    float x = window.x, y = window.y, w = Width, t = tall;
+                    if (n.TryGetValue("x", ref x) && n.TryGetValue("y", ref y)) { window.x = x; window.y = y; }
+                    if (n.TryGetValue("width", ref w)) Width = Mathf.Clamp(w, Narrowest, Widest);
+                    if (n.TryGetValue("tall", ref t)) tall = Mathf.Max(0f, t);
+                    window.width = Width;
+                    return;
+                }
+                System.IO.Directory.CreateDirectory(Kit.Folder);
+                var o = new ConfigNode();
+                o.AddValue("x", window.x.ToString("F0", System.Globalization.CultureInfo.InvariantCulture));
+                o.AddValue("y", window.y.ToString("F0", System.Globalization.CultureInfo.InvariantCulture));
+                o.AddValue("width", Width.ToString("F0", System.Globalization.CultureInfo.InvariantCulture));
+                o.AddValue("tall", tall.ToString("F0", System.Globalization.CultureInfo.InvariantCulture));
+                o.Save(path);
+            }
+            catch (Exception ex) { Kit.Log("Keystone", "could not " + (read ? "read" : "keep") + " where the window is: " + ex.Message); }
+        }
+
+        void Keep() => Kept(false);
+
+        static Texture2D gripMark;
+        /// <summary>The grip: three short lines across the corner, grey, as a window's corner is marked to be taken hold of.</summary>
+        static Texture2D GripMark()
+        {
+            if (gripMark != null) return gripMark;
+            const int S = 17;
+            gripMark = new Texture2D(S, S, TextureFormat.RGBA32, false) { hideFlags = HideFlags.HideAndDontSave, filterMode = FilterMode.Point };
+            var px = new Color32[S * S];
+            for (int y = 0; y < S; y++)
+                for (int x = 0; x < S; x++)
+                {
+                    // (y counts up from the bottom in a texture: the corner is where x is large and y small, and the lines run from its
+                    // lower left to its upper right, x - y the same along each)
+                    int d = x - y;
+                    bool on = d >= 1 && (d % 5 == 1 || d % 5 == 2) && x < S - 1 && y > 0;
+                    px[y * S + x] = on ? new Color32(160, 168, 178, 230) : new Color32(0, 0, 0, 0);
+                }
+            gripMark.SetPixels32(px);
+            gripMark.Apply();
+            return gripMark;
         }
 
         static Listed Find(string id)
@@ -352,6 +477,7 @@ namespace Keystone
 
         static bool Matches(Listed one, string words)
         {
+            if (SettingsMatching(one, words).Count > 0) return true;
             foreach (string word in words.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries))
             {
                 bool found = false;
@@ -361,6 +487,27 @@ namespace Keystone
             }
             return true;
         }
+
+        /// <summary>
+        /// The settings of a mod (of Keystone's, or Keystone's own) whose name, or whose words when pointed at, have every word
+        /// searched for: a setting can be looked for by what it does without knowing which mod has it ("shadow", "exposure").
+        /// </summary>
+        static List<Setting> SettingsMatching(Listed one, string words)
+        {
+            matched.Clear();
+            Mod mod = one.Mod ?? (one.Base ? Kit.Own : null);
+            string[] wanted = words.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            if (mod == null || wanted.Length == 0) return matched;
+            foreach (Setting setting in mod.Settings)
+            {
+                bool all = true;
+                foreach (string word in wanted)
+                    if ((setting.Label ?? "").IndexOf(word, StringComparison.OrdinalIgnoreCase) < 0 && (setting.Hint ?? "").IndexOf(word, StringComparison.OrdinalIgnoreCase) < 0) { all = false; break; }
+                if (all) matched.Add(setting);
+            }
+            return matched;
+        }
+        static readonly List<Setting> matched = new List<Setting>();
 
         void List()
         {
@@ -446,12 +593,28 @@ namespace Keystone
             Badges(one, s);
             string second = Second(one, mod, on);
             if (second.Length > 0) s.Append("\n<size=11><color=").Append(off ? "#e8a860" : "#c4cad0").Append(">").Append(second).Append("</color></size>");
+            // (searching: the settings of it that match, by name)
+            string looked = Instance != null ? Instance.search.Trim() : "";
+            if (looked.Length > 0)
+            {
+                List<Setting> found = SettingsMatching(one, looked);
+                if (found.Count > 0)
+                {
+                    s.Append("\n<size=11><color=#9fc8ff>");
+                    for (int i = 0; i < found.Count && i < 4; i++) s.Append(i > 0 ? ", " : "").Append(Safe(found[i].Label.Trim()));
+                    if (found.Count > 4) s.Append(" and ").Append(found.Count - 4).Append(" more");
+                    s.Append("</color></size>");
+                }
+            }
             return s.ToString();
         }
 
         static void Badges(Listed one, StringBuilder s)
         {
             if (one.Behind) s.Append("  <size=11><color=#86d086>newer: ").Append(Safe(one.Latest)).Append("</color></size>");
+            // (since 0.9.0: errors its own code has logged this run)
+            int errors = one.Mod != null ? one.Mod.Errors : 0;
+            if (errors > 0) s.Append("  <size=11><color=#ff8a70>").Append(errors == 1 ? "an error" : errors + " errors").Append("</color></size>");
             if (one.Note.StartsWith("its library did not load", StringComparison.Ordinal)) s.Append("  <size=11><color=#ff8a70>did not load</color></size>");
             foreach (Need need in one.Needs)
                 if (need.Met == null && !need.Game) { s.Append("  <size=11><color=#ff8a70>needs ").Append(Safe(need.Name.Replace("|", " or "))).Append("</color></size>"); break; }
@@ -494,7 +657,16 @@ namespace Keystone
         static string RowHint(Listed one, Mod mod)
         {
             string about = mod != null ? mod.About : one.About;
-            return (string.IsNullOrEmpty(about) ? one.Name : about) + (one.Author.Length > 0 ? "  (" + one.Author + ")" : "");
+            // (and with a newer version out: the first line of what is new in it, as its makers wrote)
+            string news = "";
+            if (one.Behind && one.LatestNotes.Length > 0)
+            {
+                string first = one.LatestNotes.Replace("\r", "").Split('\n')[0].Trim();
+                if (first.Length > 0) news = "\nNew in " + one.Latest + ": " + Short(first, 160);
+            }
+            // (and the last error its own code logged, if any: the whole of it is in KSP.log)
+            string error = mod != null && mod.Errors > 0 ? "\nLast error: " + Short(mod.LastError, 160) + " (KSP.log has the rest)" : "";
+            return (string.IsNullOrEmpty(about) ? one.Name : about) + (one.Author.Length > 0 ? "  (" + one.Author + ")" : "") + news + error;
         }
 
         /// <summary>The foot of the list: what the mods cost, and looking online for newer versions, which is the player's to allow.</summary>
@@ -502,6 +674,7 @@ namespace Keystone
         {
             GUILayout.BeginHorizontal();
             if (GUILayout.Button(new GUIContent("What each mod costs", "How much of each frame every mod takes, and what each loaded from its folder."), GUILayout.Width(160f))) Go(CostsPage);
+            if (GUILayout.Button(new GUIContent("Keys", "Every key of every mod in one list, and where one is also another mod's, or the game's own."), GUILayout.Width(60f))) Go(KeysPage);
             IMeter meter = Meter.Best;
             if (meter != null && meter.Running)
             {
@@ -600,6 +773,64 @@ namespace Keystone
             if (Event.current.type == EventType.Repaint) pageHigh = GUILayoutUtility.GetLastRect().height;
             if (pageScrolls) GUILayout.EndScrollView();
             if (Event.current.type == EventType.Repaint) partShown = GUILayoutUtility.GetLastRect().height;
+        }
+
+        /// <summary>
+        /// (Since 0.9.0.) Every key of every mod, in one list: each with what it does, whose it is, and where it is also another
+        /// mod's or the game's own (its bindings as the player has them in its settings). A click on one goes to its mod's page,
+        /// where it can be changed.
+        /// </summary>
+        void Keys()
+        {
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button(new GUIContent("All mods", "Back to the list of every mod."), GUILayout.Width(80f))) Go(null);
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Every mod's keys</b>", Title, GUILayout.ExpandWidth(true));
+            GUILayout.EndHorizontal();
+            GUILayout.Space(4f);
+            if (Event.current.type == EventType.Layout) pageScrolls = pageHigh > room + 1f;
+            if (pageScrolls) pageScroll = GUILayout.BeginScrollView(pageScroll, false, true, GUILayout.Height(room));
+            GUILayout.BeginVertical();
+            int count = 0, clashes = 0;
+            foreach (Mod mod in Kit.All())
+            {
+                foreach (Setting setting in mod.Settings)
+                {
+                    if (!(setting is Hotkey key)) continue;
+                    count++;
+                    string clash = key.Clash() ?? key.GameClash();
+                    if (clash != null) clashes++;
+                    KeyRow(mod, key.Shown, key.Label, clash, key.Hint ?? "");
+                }
+                // (and the keys it reads by itself, not settings: listed and checked the same, but changed only in the mod, if at all)
+                List<Mod.FixedKey> keys = mod.FixedKeys;
+                for (int n = 0; n < keys.Count; n++)
+                {
+                    count++;
+                    string clash = Hotkey.Clash(keys[n].Code, keys[n].Modifier, mod, null, n) ?? Hotkey.GameClash(keys[n].Code, keys[n].Modifier);
+                    if (clash != null) clashes++;
+                    KeyRow(mod, Hotkey.Spoken(keys[n].Code, keys[n].Modifier), keys[n].Does, clash, "A key " + mod.Name + " reads by itself: it cannot be changed here.");
+                }
+            }
+            GUILayout.Label(count == 0 ? "No mod has a key of its own." : count + (count == 1 ? " key" : " keys") + (clashes == 0 ? ", none the same as another's or the game's." : ", " + clashes + " the same as another's or the game's: a click goes to the mod, where it can be changed."), Small);
+            GUILayout.EndVertical();
+            if (Event.current.type == EventType.Repaint) pageHigh = GUILayoutUtility.GetLastRect().height;
+            if (pageScrolls) GUILayout.EndScrollView();
+            if (Event.current.type == EventType.Repaint) partShown = GUILayoutUtility.GetLastRect().height;
+        }
+
+        /// <summary>One key on the page of every key: a click goes to its mod's page.</summary>
+        void KeyRow(Mod mod, string shown, string does, string clash, string hint)
+        {
+            var line = new StringBuilder();
+            line.Append("<b>").Append(Safe(shown)).Append("</b>  ").Append(Safe(does)).Append("  <size=11><color=#a8b0b8>").Append(Safe(mod.Name)).Append("</color></size>");
+            if (clash != null) line.Append("\n<size=11><color=#e0a040>also ").Append(Safe(clash)).Append("</color></size>");
+            if (GUILayout.Button(new GUIContent(line.ToString(), hint), RowStyle, GUILayout.ExpandWidth(true)))
+            {
+                Listed at = null;
+                foreach (Listed one in Listing.All) if (one.Mod == mod || (mod == Kit.Own && one.Base)) { at = one; break; }
+                if (at != null) Go(at);
+            }
         }
 
         // ---------------------------------------------------------------- a mod's page
@@ -745,6 +976,27 @@ namespace Keystone
         }
 
 #if DEV
+        static long ownUpdate, ownFilm, ownDraw;
+        static int ownDraws, ownFrom = -1;
+        static float ownSince;
+
+        /// <summary>
+        /// For the development build: Keystone's own time on the game's thread since this was last asked (its Update, the film's
+        /// work once a frame, the window's drawing), as a frame's worth on average, and how many times a frame the window's
+        /// drawing was called. (Its share of the game's interface beyond that, Unity's own work for each component that draws,
+        /// is not in it: since 0.9.0 there is none while the window is shut, the component that draws being switched off.)
+        /// </summary>
+        public static string Own()
+        {
+            int frames = ownFrom < 0 ? 0 : Time.frameCount - ownFrom;
+            double tick = 1e6 / System.Diagnostics.Stopwatch.Frequency;
+            string said = frames <= 0 ? "begun" :
+                frames + " frames in " + (Time.realtimeSinceStartup - ownSince).ToString("F1") + " s: update " + (ownUpdate * tick / frames).ToString("F1") + " µs a frame, the film " + (ownFilm * tick / frames).ToString("F1") +
+                " µs, the window's drawing " + (ownDraw * tick / frames).ToString("F1") + " µs (" + ((float)ownDraws / frames).ToString("F1") + " calls a frame); window " + (Instance != null && Instance.open ? "open" : "shut");
+            ownUpdate = ownFilm = ownDraw = 0; ownDraws = 0; ownFrom = Time.frameCount; ownSince = Time.realtimeSinceStartup;
+            return said;
+        }
+
         static int tracing;
         static readonly System.Text.StringBuilder traced = new System.Text.StringBuilder();
         static void Trace(string line) { traced.Append(Time.frameCount).Append(' ').Append(line).Append('\n'); tracing--; }
@@ -768,6 +1020,25 @@ namespace Keystone
         }
 
         /// <summary>For the development build: open or close the window, and say what there is in it.</summary>
+        /// <summary>(Development build: the window's page: "keys", "costs", or anything else the list of mods.)</summary>
+        public static string Goto(string page)
+        {
+            if (Instance == null) return "not running";
+            Instance.Go(page == "keys" ? KeysPage : page == "costs" ? CostsPage : null);
+            return "going to " + (page == "keys" || page == "costs" ? page : "the list");
+        }
+
+        /// <summary>(Development build: the window made so wide and its list so tall, "520 380", as the grip would, and kept; nothing: what it is.)</summary>
+        public static string Size(string v)
+        {
+            if (Instance == null) return "not running";
+            string[] w = (v ?? "").Split(new[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
+            if (w.Length >= 1) Width = Mathf.Clamp(float.Parse(w[0], System.Globalization.CultureInfo.InvariantCulture), Narrowest, Widest);
+            if (w.Length >= 2) Instance.tall = Mathf.Max(0f, float.Parse(w[1], System.Globalization.CultureInfo.InvariantCulture));
+            if (w.Length >= 1) Instance.Keep();
+            return "window at " + Instance.window.x.ToString("F0") + ", " + Instance.window.y.ToString("F0") + ", " + Width.ToString("F0") + " wide, its list " + (Instance.tall > 0f ? Instance.tall.ToString("F0") + " tall" : "as the screen suits");
+        }
+
         public static string Show()
         {
             if (Instance == null) return "not running";

@@ -62,6 +62,13 @@ namespace Keystone
         /// <summary>(For trying the other way where both work.)</summary>
         public static bool PreferOther;
 
+        static int smearFrame = -10;
+        /// <summary>Whether a lens smears what moves while its shutter is open, this frame or the last (for another mod that would
+        /// blend frames the same way, to stand aside: the two together would smear twice).</summary>
+        public static bool Smearing => Time.frameCount - smearFrame <= 1;
+        /// <summary>For a lens: it smears what moves this frame.</summary>
+        public static void Smears() { smearFrame = Time.frameCount; }
+
         /// <summary>The one to use: this base's own where it works, otherwise the other if there is one that does, otherwise nothing.</summary>
         public static ILens Best
         {
@@ -160,6 +167,7 @@ namespace Keystone
         public void Use(Camera camera, Look look)
         {
             if (!Works || camera == null) return;
+            if (look.open > 0.02f) Lens.Smears();
             if (commands == null)
             {
                 commands = new CommandBuffer { name = "Keystone lens" };

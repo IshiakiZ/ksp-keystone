@@ -32,7 +32,7 @@ namespace Keystone
     /// </summary>
     public static class Kit
     {
-        public const string Version = "0.8.1";
+        public const string Version = "0.9.0";
 
         static readonly List<Mod> mods = new List<Mod>();
 
@@ -54,9 +54,166 @@ namespace Keystone
                     window = own.Hotkey("window", "Opens this window", KeyCode.K, true, "The key that opens and closes this window, wherever you are in the game. Click, then press the key you want (with the game's modifier key held, if it is to be with it).");
                     online = own.Toggle("online", "Look for newer versions online", true,
                         "On as installed. About once a day, while this window is open, each mod's own address for its newest version is asked (the copy of its .version file its makers keep online, and its latest release on GitHub), one at a time, and the answers are kept in Keystone's folder. Nothing about you is sent; the sites see that this computer asked, as with any web page. Nothing is downloaded unless you press a mod's Update button.");
+                    own.Panel = AllMods;
                 }
                 return own;
             }
+        }
+
+        static string allSaid = "";
+
+        /// <summary>
+        /// Keystone's page: every mod set for speed at once (each mod says which of its settings, and to what: Mod.Faster), or
+        /// every mod's settings put back as installed. Each mod's page shows what was changed, and its own Defaults button puts
+        /// that mod alone back.
+        /// </summary>
+        static void AllMods()
+        {
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Every mod at once</b>", Host.Rich);
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button(new GUIContent("Set for speed", "Each mod's dearest settings set to what costs least for what is lost: the clouds drawn less finely, the sun's shafts off, the seaweed off, rocket smoke not hanging as long. Each mod's page shows what changed."), GUILayout.Width(130f)))
+            {
+                int n = 0, mods = 0;
+                foreach (Mod m in Mods) if (m.HasFaster) { int c = m.SetForSpeed(); if (c > 0) { n += c; mods++; } }
+                allSaid = n == 0 ? "Every mod was set for speed already." : n + (n == 1 ? " setting" : " settings") + " changed in " + mods + (mods == 1 ? " mod." : " mods.");
+            }
+            if (GUILayout.Button(new GUIContent("All as installed", "Every mod's settings put back as they come (not the keys, nor looking online: Keystone's own are left as they are)."), GUILayout.Width(130f)))
+            {
+                int n = 0;
+                foreach (Mod m in Mods) { n += m.Changes; m.Reset(); }
+                allSaid = n == 0 ? "Every mod's settings were as installed already." : n + (n == 1 ? " setting" : " settings") + " put back.";
+            }
+            GUILayout.EndHorizontal();
+            if (allSaid.Length > 0) GUILayout.Label(allSaid, Host.Small);
+            Sets();
+        }
+
+        // ---- (since 0.9.0) every mod's settings kept as a set under a name, and put back: to try a look and go back to one's own,
+        // or to hand a look to someone else (the file, in Keystone's folder)
+        static string setName = "", setSaid = "";
+        static string[] setNames;
+        static float setsLooked = -100f;
+
+        static string SetsFolder => Folder + "Sets/";
+
+        /// <summary>The sets kept, by name (looked at again every few seconds while the page is open: one may be dropped in by hand).</summary>
+        static string[] SetNames()
+        {
+            if (setNames == null || Time.realtimeSinceStartup - setsLooked > 3f)
+            {
+                setsLooked = Time.realtimeSinceStartup;
+                try
+                {
+                    setNames = System.IO.Directory.Exists(SetsFolder) ? System.IO.Directory.GetFiles(SetsFolder, "*.cfg") : new string[0];
+                    for (int n = 0; n < setNames.Length; n++) setNames[n] = System.IO.Path.GetFileNameWithoutExtension(setNames[n]);
+                    Array.Sort(setNames, StringComparer.OrdinalIgnoreCase);
+                }
+                catch (Exception) { setNames = new string[0]; }
+            }
+            return setNames;
+        }
+
+        static void Sets()
+        {
+            GUILayout.Space(6f);
+            GUILayout.Label(new GUIContent("<b>Sets of settings</b>", "Every mod's settings as they are now, kept under a name, to be put back later: to try a look and come back to your own, or to give a look to a friend (the file is in GameData/Keystone/PluginData/Sets/; one put there by hand shows here)."), Host.Rich);
+            GUILayout.BeginHorizontal();
+            setName = Host.Typed(Host.TypedName + "setname", setName, 160f, out bool entered, out bool _);
+            bool keep = GUILayout.Button(new GUIContent("Keep as a set", "Every mod's settings as they are now kept under this name (one of the same name is written over)."), GUILayout.Width(110f));
+            GUILayout.EndHorizontal();
+            if (keep || (entered && setName.Trim().Length > 0)) setSaid = Keep(setName);
+            string[] names = SetNames();
+            for (int n = 0; n < names.Length; n++)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(names[n], Host.Plain, GUILayout.Width(Host.LabelWidth + 30f));
+                if (GUILayout.Button(new GUIContent("Put back", "Every mod's settings as this set has them (a mod not in it, or a setting it does not name, is left as it is)."), GUILayout.Width(80f))) setSaid = PutBack(names[n]);
+                GUILayout.EndHorizontal();
+            }
+            if (names.Length == 0) GUILayout.Label("No set kept yet.", Host.Small);
+            if (setSaid.Length > 0) GUILayout.Label(setSaid, Host.Small);
+        }
+
+        /// <summary>Every mod's settings (not Keystone's own: its keys and looking online are this computer's) kept as a set under a name.</summary>
+        internal static string Keep(string name)
+        {
+            string file = Clean(name);
+            if (file.Length == 0) return "Give the set a name first.";
+            try
+            {
+                var root = new ConfigNode();
+                root.AddValue("name", (name ?? "").Trim());
+                root.AddValue("made", DateTime.Now.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture));
+                int count = 0;
+                lock (mods)
+                    foreach (Mod m in mods)
+                    {
+                        ConfigNode one = root.AddNode("MOD");
+                        one.AddValue("name", m.Name ?? "");
+                        one.AddValue("version", m.Version ?? "");
+                        foreach (Setting setting in m.Settings)
+                        {
+                            if (setting == null || setting is Hotkey || string.IsNullOrEmpty(setting.Key)) continue;
+                            string value = setting.Write();
+                            if (value == null) continue;
+                            one.AddValue(setting.Key, value);
+                            count++;
+                        }
+                    }
+                System.IO.Directory.CreateDirectory(SetsFolder);
+                root.Save(SetsFolder + file + ".cfg");
+                setsLooked = -100f;
+                return "Kept \"" + name.Trim() + "\": " + count + " settings of " + mods.Count + " mods.";
+            }
+            catch (Exception ex) { return "Could not keep it: " + ex.Message; }
+        }
+
+        /// <summary>Every mod's settings as a kept set has them.</summary>
+        internal static string PutBack(string name)
+        {
+            try
+            {
+                ConfigNode root = ConfigNode.Load(SetsFolder + Clean(name) + ".cfg");
+                if (root == null) return "No set called \"" + name + "\".";
+                int changed = 0, mods = 0;
+                foreach (ConfigNode one in root.GetNodes("MOD"))
+                {
+                    Mod m = Find(one.GetValue("name") ?? "");
+                    if (m == null) continue;
+                    int before = changed;
+                    foreach (Setting setting in m.Settings)
+                    {
+                        if (setting is Hotkey) continue;
+                        string value = one.GetValue(setting.Key);
+                        if (value != null && setting.Apply(value)) changed++;
+                    }
+                    if (changed > before) mods++;
+                }
+                return changed == 0 ? "Every setting was as \"" + name + "\" has it already." : changed + (changed == 1 ? " setting" : " settings") + " changed in " + mods + (mods == 1 ? " mod" : " mods") + ", as \"" + name + "\" has them.";
+            }
+            catch (Exception ex) { return "Could not put it back: " + ex.Message; }
+        }
+
+#if DEV
+        /// <summary>(Development build) Keep and PutBack, from outside; Drop deletes a kept set.</summary>
+        public static string KeepSet(string name) => Keep(name);
+        public static string PutBackSet(string name) => PutBack(name);
+        public static string DropSet(string name)
+        {
+            string path = SetsFolder + Clean(name) + ".cfg";
+            if (!System.IO.File.Exists(path)) return "no such set";
+            System.IO.File.Delete(path); setsLooked = -100f;
+            return "dropped";
+        }
+#endif
+
+        /// <summary>A name made fit to be a file's.</summary>
+        static string Clean(string name)
+        {
+            var b = new System.Text.StringBuilder();
+            foreach (char c in (name ?? "").Trim()) b.Append(char.IsLetterOrDigit(c) || c == ' ' || c == '-' || c == '_' ? c : '_');
+            return b.ToString().Trim();
         }
 
         /// <summary>The key that opens and closes the window.</summary>
@@ -86,14 +243,55 @@ namespace Keystone
             // (where it was called from: which library, and so which folder in GameData, is the mod's)
             try { mod.From = new System.Diagnostics.StackFrame(1, false).GetMethod()?.DeclaringType; }
             catch (Exception) { }
-            int at = mods.FindIndex(m => m.Name == name);
-            if (at >= 0) mods[at] = mod;
-            else mods.Add(mod);
+            lock (mods)
+            {
+                int at = mods.FindIndex(m => m.Name == name);
+                if (at >= 0) mods[at] = mod;
+                else mods.Add(mod);
+            }
             Log("Keystone", name + " " + version + " is here");
+            Listen();
             return mod;
         }
 
-        public static Mod Find(string name) => mods.Find(m => m.Name == name);
+        // ---- (since 0.9.0) errors that come of a registered mod's own code, counted on its row in the window (see Host.Badges)
+        static bool listening;
+
+        static void Listen()
+        {
+            if (listening) return;
+            listening = true;
+            Application.logMessageReceivedThreaded += Heard;
+        }
+
+        /// <summary>
+        /// Every error and exception the game logs (on any thread): put down to the registered mod whose code it came out of, the
+        /// first frame of the stack that is in one of their namespaces (a mod's error passing through another's code is the
+        /// first's). The player then sees on the mod's row that something went wrong, and what, without opening the log.
+        /// </summary>
+        static void Heard(string text, string trace, LogType type)
+        {
+            if (type != LogType.Exception && type != LogType.Error) return;
+            Mod who = null;
+            int first = int.MaxValue;
+            lock (mods)
+            {
+                foreach (Mod m in mods)
+                {
+                    // (the game logs errors without their stack, as a rule: a mod of the family begins its own lines with its name in
+                    // brackets, "[Natural Light] ...", and that says whose it is; an exception's stack says it of anything)
+                    if (text != null && text.StartsWith("[" + m.Name + "]", StringComparison.Ordinal)) { who = m; break; }
+                    if (string.IsNullOrEmpty(trace)) continue;
+                    string ns = m.From != null ? m.From.Namespace : null;
+                    if (string.IsNullOrEmpty(ns)) continue;
+                    int at = trace.IndexOf(ns + ".", StringComparison.Ordinal);
+                    if (at >= 0 && at < first) { first = at; who = m; }
+                }
+            }
+            who?.NoteError(text);
+        }
+
+        public static Mod Find(string name) { lock (mods) return mods.Find(m => m.Name == name); }
 
         public static void Log(string who, string text) => Debug.Log("[" + who + "] " + text);
     }
@@ -110,7 +308,57 @@ namespace Keystone
         /// <summary>The code that registered it (its library is the mod's).</summary>
         internal Type From;
 
+        /// <summary>(Since Keystone 0.9.) How many errors its own code has logged this run, and the last of them (its first line).</summary>
+        public int Errors => errors;
+        public string LastError { get { lock (errorGate) return lastError; } }
+        int errors;
+        string lastError = "";
+        readonly object errorGate = new object();
+
+        internal void NoteError(string text)
+        {
+            System.Threading.Interlocked.Increment(ref errors);
+            string line = (text ?? "").Replace("\r", "").Split('\n')[0].Trim();
+            if (line.Length > 160) line = line.Substring(0, 157) + "...";
+            lock (errorGate) lastError = line;
+        }
+
         public IList<Setting> Settings => settings;
+
+        /// <summary>A key a mod uses that is not one of its settings (it cannot be changed in the window), for the list of every key.</summary>
+        internal struct FixedKey { public KeyCode Code; public bool Modifier; public string Does; }
+        readonly List<FixedKey> fixedKeys = new List<FixedKey>();
+        internal List<FixedKey> FixedKeys { get { lock (fixedKeys) return new List<FixedKey>(fixedKeys); } }
+
+        /// <summary>
+        /// (Since Keystone 0.9.) A key this mod reads by itself, not one of its settings, with the game's modifier key held or
+        /// not and what it does: so that the window's page of every mod's keys has it too, and checks it against the others and
+        /// the game's. Call it from a method of its own, in a try: a Keystone older than 0.9.0 has no such call.
+        /// </summary>
+        public void Uses(KeyCode code, bool modifier, string does)
+        {
+            if (code == KeyCode.None) return;
+            lock (fixedKeys) fixedKeys.Add(new FixedKey { Code = code, Modifier = modifier, Does = does ?? "" });
+        }
+
+        readonly List<KeyValuePair<Setting, string>> faster = new List<KeyValuePair<Setting, string>>();
+
+        /// <summary>
+        /// What one of this mod's settings is to be when the player asks for every mod to be set for speed (Keystone's page, "Every
+        /// mod set for speed"): as the setting writes it to its file ("False", "0", "0.6"). Only the settings that cost the most
+        /// and lose the least. (Since Keystone 0.9.)
+        /// </summary>
+        public void Faster(Setting setting, string value) { if (setting != null && !string.IsNullOrEmpty(value)) faster.Add(new KeyValuePair<Setting, string>(setting, value)); }
+
+        /// <summary>This mod's settings set for speed, as it said with Faster. How many were changed.</summary>
+        internal int SetForSpeed()
+        {
+            int n = 0;
+            foreach (KeyValuePair<Setting, string> f in faster) if (f.Key.Apply(f.Value)) n++;
+            return n;
+        }
+
+        internal bool HasFaster => faster.Count > 0;
 
         /// <summary>Something about this mod was changed by the player (or put back to what it was to begin with).</summary>
         public event Action Changed;
