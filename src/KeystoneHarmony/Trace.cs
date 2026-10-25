@@ -213,7 +213,12 @@ namespace KeystoneHarmony
             if (what == null) return "nothing noted";
             bool was = on;
             on = false;
-            string to = Path.Combine(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal), ".ksp-ai-bridge"), "trace.txt");
+            // (in ~/.ksp-ai-bridge as the bridge's other files are: the runtime's "Personal" folder is the home folder on a Mac but
+            // Documents on Windows, which may be redirected into OneDrive and need not have the folder: seen on the PC, 2026-10-24)
+            string home = Environment.GetEnvironmentVariable(Application.platform == RuntimePlatform.WindowsPlayer ? "USERPROFILE" : "HOME");
+            if (string.IsNullOrEmpty(home)) home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            string to = Path.Combine(Path.Combine(home, ".ksp-ai-bridge"), "trace.txt");
+            Directory.CreateDirectory(Path.GetDirectoryName(to));
             using (var w = new StreamWriter(to))
             {
                 w.WriteLine("# trace: " + count + " things noted, " + kept + " of " + frames + " frames kept (longer than " + keepOver + " ms), ticks a second " + Stopwatch.Frequency);

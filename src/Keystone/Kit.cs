@@ -5,7 +5,7 @@ using System.Reflection;
 using UnityEngine;
 
 #if !DEV
-[assembly: KSPAssembly("Keystone", 0, 8)]
+[assembly: KSPAssembly("Keystone", 0, 10)]
 #endif
 
 namespace Keystone
@@ -32,7 +32,7 @@ namespace Keystone
     /// </summary>
     public static class Kit
     {
-        public const string Version = "0.9.0";
+        public const string Version = "0.10.0";
 
         static readonly List<Mod> mods = new List<Mod>();
 

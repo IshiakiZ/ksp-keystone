@@ -96,7 +96,8 @@ Shader "Keystone/FarMotion"
                 // One triangle that covers the whole screen, given in the screen's own coordinates (-1 to 1 each way).
                 OUT.pos = float4(in_POSITION0.xy * _FmSheet.xy, _FmSheet.z, _FmSheet.w);
                 // (drawn into whatever the camera is drawing into, which may lie either way: as for the lens's second go, above; Natural
-                // Light's veil and the sea's lens in the water the same)
+                // Light's veil and the sea's lens in the water the same; and Cinema Camera's look, whose picture came out upside down on
+                // Direct3D without it, the camera drawing into a picture of its own there (the PC, 2026-10-20))
                 float way = 1.0;
 #if UNITY_UV_STARTS_AT_TOP
                 way = _ProjectionParams.x;

@@ -31,13 +31,15 @@ Copy the `Keystone` folder from the download into your KSP's `GameData`. One cop
 ## For mod authors
 
 A mod registers with one line and gets a page in the window, settings that are kept and keys a player can change.
-Keystone also has a lens and a film that any mod can use.
+Keystone also has a lens and a film that any mod can use, and (0.10.0) recorded sounds read from a mod's own packed file
+and a window of a mod's own.
 [Everything a mod can use](https://github.com/IshiakiZ/ksp-keystone/wiki/For-mod-authors).
 
 ## Works on
 
-Mac: tried. Windows 11 (Direct3D 11 and OpenGL): this version run (2026-10-20: its motion beyond the near camera built for Direct3D and
-loaded), its in-game update tried; its window not tried there. Linux: never run.
+Mac: tried. Windows 11 (Direct3D 11 and OpenGL): 0.9.0 run (2026-10-20: its motion beyond the near camera built for Direct3D and
+loaded), its in-game update tried, and 0.10.0 run with every mod in the checks of 2026-10-24 and 25; its window, and 0.10.0's
+recorded sounds and window of a mod's own, not tried there. Linux: never run.
 
 **More:** [the long description](https://github.com/IshiakiZ/ksp-keystone/wiki/The-long-description) (everything in full, and what was
 tried on each system) and the rest of the [wiki](https://github.com/IshiakiZ/ksp-keystone/wiki).

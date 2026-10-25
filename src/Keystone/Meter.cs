@@ -246,7 +246,11 @@ namespace Keystone
             Mod m = Kit.Find(w[0]);
             if (m == null) return "no mod " + w[0];
             foreach (Setting s in m.Settings)
+            {
                 if (s.Key == w[1] && s is Toggle t) { t.Value = w[2] == "true"; return w[0] + " " + w[1] + " = " + t.Value; }
+                // (and a choice, by its number: "Cinema Camera|move|1")
+                if (s.Key == w[1] && s is Choice c && int.TryParse(w[2], out int pick)) { c.Value = pick; return w[0] + " " + w[1] + " = " + c.Value; }
+            }
             return "no switch " + w[1];
         }
 
