@@ -5,7 +5,7 @@ using System.Reflection;
 using UnityEngine;
 
 #if !DEV
-[assembly: KSPAssembly("Keystone", 0, 10)]
+[assembly: KSPAssembly("Keystone", 0, 11)]
 #endif
 
 namespace Keystone
@@ -32,7 +32,7 @@ namespace Keystone
     /// </summary>
     public static class Kit
     {
-        public const string Version = "0.10.0";
+        public const string Version = "0.11.0";
 
         static readonly List<Mod> mods = new List<Mod>();
 
@@ -41,7 +41,7 @@ namespace Keystone
 
         static Mod own;
         static Hotkey window;
-        static Toggle online;
+        static Toggle online, advanced;
 
         /// <summary>Keystone's own few settings (the key that opens the window, looking online): kept like a mod's, in Keystone.cfg, and shown on Keystone's page in the list of mods.</summary>
         internal static Mod Own
@@ -54,6 +54,8 @@ namespace Keystone
                     window = own.Hotkey("window", "Opens this window", KeyCode.K, true, "The key that opens and closes this window, wherever you are in the game. Click, then press the key you want (with the game's modifier key held, if it is to be with it).");
                     online = own.Toggle("online", "Look for newer versions online", true,
                         "On as installed. About once a day, while this window is open, each mod's own address for its newest version is asked (the copy of its .version file its makers keep online, and its latest release on GitHub), one at a time, and the answers are kept in Keystone's folder. Nothing about you is sent; the sites see that this computer asked, as with any web page. Nothing is downloaded unless you press a mod's Update button.");
+                    advanced = own.Toggle("advanced", "Show every setting", false,
+                        "Off as installed: each mod's page shows the settings most worth knowing. On: every one, down to the finest details. Each mod's page has the same switch at its head (Simple, Advanced).");
                     own.Panel = AllMods;
                 }
                 return own;
@@ -87,6 +89,7 @@ namespace Keystone
             GUILayout.EndHorizontal();
             if (allSaid.Length > 0) GUILayout.Label(allSaid, Host.Small);
             Sets();
+            Share.Draw();
         }
 
         // ---- (since 0.9.0) every mod's settings kept as a set under a name, and put back: to try a look and go back to one's own,
@@ -127,7 +130,8 @@ namespace Keystone
             for (int n = 0; n < names.Length; n++)
             {
                 GUILayout.BeginHorizontal();
-                GUILayout.Label(names[n], Host.Plain, GUILayout.Width(Host.LabelWidth + 30f));
+                // (a long name cut short, rather than run under its button)
+                GUILayout.Label(new GUIContent(names[n].Length > 24 ? names[n].Substring(0, 22) + "..." : names[n], names[n]), Host.Plain, GUILayout.Width(Host.LabelWidth + 30f));
                 if (GUILayout.Button(new GUIContent("Put back", "Every mod's settings as this set has them (a mod not in it, or a setting it does not name, is left as it is)."), GUILayout.Width(80f))) setSaid = PutBack(names[n]);
                 GUILayout.EndHorizontal();
             }
@@ -206,6 +210,21 @@ namespace Keystone
             System.IO.File.Delete(path); setsLooked = -100f;
             return "dropped";
         }
+
+        /// <summary>(Development build) One setting set as the player would set it: "Mod name|key|value"; or, with no value, said.</summary>
+        public static string SetOne(string what)
+        {
+            string[] t = (what ?? "").Split('|');
+            Mod mod = t.Length >= 2 ? Find(t[0]) : null;
+            if (mod == null) return "no such mod";
+            foreach (Setting setting in mod.Settings)
+                if (setting != null && setting.Key == t[1])
+                {
+                    if (t.Length >= 3) setting.Apply(t[2]);
+                    return mod.Name + " " + setting.Key + " = " + setting.Write();
+                }
+            return "no such setting";
+        }
 #endif
 
         /// <summary>A name made fit to be a file's.</summary>
@@ -221,6 +240,9 @@ namespace Keystone
 
         /// <summary>Whether the player allows looking online (see Online).</summary>
         internal static Toggle OnlineSwitch { get { if (online == null) _ = Own; return online; } }
+
+        /// <summary>(Since 0.11.0.) Whether the mods' pages show every setting, their fine details too (see Mod.Advanced).</summary>
+        internal static Toggle AdvancedShown { get { if (advanced == null) _ = Own; return advanced; } }
 
         /// <summary>Every mod and Keystone's own settings: for what looks through all of them (keys that clash, saving).</summary>
         internal static IEnumerable<Mod> All()
@@ -419,9 +441,33 @@ namespace Keystone
 
         string Path => Kit.Folder + Name.Replace(" ", "") + ".cfg";
 
+        bool fine;
+
+        /// <summary>
+        /// (Since Keystone 0.11.) The settings made after this are fine details: on the mod's page only when the window is set to
+        /// show every setting (its Advanced switch), or when a search finds them; Simple() goes back. Call it from a method of its
+        /// own, in a try: an older Keystone has no such call, and shows them with the rest.
+        /// </summary>
+        public void Advanced() => fine = true;
+
+        /// <summary>(Since Keystone 0.11.) The settings made after this are shown in the simple view too, as they all were before.</summary>
+        public void Simple() => fine = false;
+
+        /// <summary>How many of its settings are fine details (headings left out).</summary>
+        internal int FineCount
+        {
+            get
+            {
+                int n = 0;
+                for (int i = 0; i < settings.Count; i++) if (settings[i].Fine && settings[i].Key != null) n++;
+                return n;
+            }
+        }
+
         T Add<T>(T setting) where T : Setting
         {
             setting.Owner = this;
+            setting.Fine = fine;
             string text = saved != null ? saved.GetValue(setting.Key) : null;
             if (text != null)
             {

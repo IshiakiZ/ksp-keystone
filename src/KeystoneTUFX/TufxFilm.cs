@@ -51,7 +51,31 @@ namespace KeystoneTUFX
         /// <summary>(Development build: how often a grade was given and how often left as it was, since this was last asked.)</summary>
         public static string Counts() { string said = "given " + given_ + ", left as it was " + skipped_; given_ = skipped_ = 0; return said; }
         static int given_, skipped_;
+        static bool glowAsBefore;
+        /// <summary>(Development build: the glow's threshold given as it was before 2026-10-25, as light where Unity takes a shown value, and back: for pictures of before and after.)</summary>
+        public static string GlowAsBefore() { glowAsBefore = !glowAsBefore; return glowAsBefore ? "the glow's threshold as before 2026-10-25" : "the glow's threshold as a shown value"; }
+        static bool creasesAsBefore;
+        /// <summary>(Development build: the creases darkened as before 2026-10-31, the better kind wherever there is a compute shader, and back: for pictures of before and after.)</summary>
+        public static string CreasesAsBefore() { creasesAsBefore = !creasesAsBefore; return creasesAsBefore ? "the creases as before 2026-10-31" : "the creases by the kind for this game's cameras"; }
 #endif
+
+        // (The better kind of the darkening of creases needs a compute shader, which the game's OpenGL on a Mac has not got. And it
+        // is no use where the game draws with two cameras (OpenGL anywhere; Direct3D's depths run backwards and it has the one): it
+        // cannot tell what the near camera left empty from a wall at the end of that camera's 400 m, so it darkened the foot of
+        // that wall like a crease, the far ground and the low sky, by two fifths at the near ground's edge and less and less for
+        // some 190 rows up. In fog, where the two cameras' parts should be one colour, that was a dark band with a ruled edge
+        // across the whole picture (the owner's black line, 2026-10-28; this PC's OpenGL). The other kind leaves alone what the
+        // camera did not draw, so past 400 m nothing is darkened, as on a Mac.)
+        static bool Better
+        {
+            get
+            {
+#if DEV
+                if (creasesAsBefore) return SystemInfo.supportsComputeShaders;
+#endif
+                return SystemInfo.supportsComputeShaders && SystemInfo.usesReversedZBuffer;
+            }
+        }
 
         // (since Keystone 0.9.0: what was last set, to set it again only when something has changed)
         Grade given;
@@ -70,7 +94,7 @@ namespace KeystoneTUFX
 #if DEV
                 skipped_++;
 #endif
-                GroundFacing.Keep(g.nooks > 0.005f && !SystemInfo.supportsComputeShaders);
+                GroundFacing.Keep(g.nooks > 0.005f && !Better);
                 return;
             }
 #if DEV
@@ -110,7 +134,15 @@ namespace KeystoneTUFX
             if (glow.active)
             {
                 glow.intensity.Override(4f * g.glow);
-                glow.threshold.Override(Mathf.Max(0.1f, g.glowFrom));
+                // (Unity takes the glow's threshold as a shown value and turns it into light itself, where the grade's is light already. Given
+                // as it was until 2026-10-25, the threshold for an eye opened 2.2 stops in rain, 0.22, was 0.035 in the light: the whole of a grey
+                // day glowed at full strength, a white fog over everything, and an overcast, a rain and a storm overhead all came out near white
+                // (levels 220-236 of 255, where they are 70-105 with the eye shut). By day, at 1, the two are the same.)
+                float from = Mathf.LinearToGammaSpace(g.glowFrom);
+#if DEV
+                if (glowAsBefore) from = g.glowFrom;
+#endif
+                glow.threshold.Override(Mathf.Max(0.1f, from));
                 glow.softKnee.Override(0.3f);                                                 // (a wider knee than this puts a veil over everything that is merely light)
                 glow.diffusion.Override(Mathf.Clamp(g.glowWide, 1f, 10f));
                 glow.color.Override(g.glowTint);
@@ -119,15 +151,14 @@ namespace KeystoneTUFX
             nooks.active = g.nooks > 0.005f;
             if (nooks.active)
             {
-                // (the better kind needs a compute shader, which the game's OpenGL on a Mac has not got)
-                nooks.mode.Override(SystemInfo.supportsComputeShaders ? AmbientOcclusionMode.MultiScaleVolumetricObscurance : AmbientOcclusionMode.ScalableAmbientObscurance);
-                nooks.intensity.Override(SystemInfo.supportsComputeShaders ? 1.1f * g.nooks : 2.6f * g.nooks);
+                nooks.mode.Override(Better ? AmbientOcclusionMode.MultiScaleVolumetricObscurance : AmbientOcclusionMode.ScalableAmbientObscurance);
+                nooks.intensity.Override(Better ? 1.1f * g.nooks : 2.6f * g.nooks);
                 nooks.radius.Override(0.55f);
                 nooks.quality.Override(AmbientOcclusionQuality.Low);
                 nooks.thicknessModifier.Override(1.2f);
             }
             // (and where that is the kind that reads which way each surface faces, the ground's facing put in for it: see GroundFacing)
-            GroundFacing.Keep(nooks.active && !SystemInfo.supportsComputeShaders);
+            GroundFacing.Keep(nooks.active && !Better);
 
             corners.active = g.corners > 0.005f;
             if (corners.active) { corners.intensity.Override(0.42f * g.corners); corners.smoothness.Override(0.42f); }
@@ -209,14 +240,14 @@ namespace KeystoneTUFX
 namespace KeystoneTUFX
 {
     /// <summary>
-    /// The way the ground faces, put into the picture Unity's darkening of creases reads, where that darkening is the kind a
-    /// graphics card without compute shaders gets (the game's OpenGL on a Mac). That kind takes which way each surface faces
+    /// The way the ground faces, put into the picture Unity's darkening of creases reads, where that darkening is the kind
+    /// used on the game's OpenGL (see TufxFilm.Better). That kind takes which way each surface faces
     /// from a picture Unity draws by drawing everything again with a shader of its own, and the game's ground is not drawn
     /// into it: flat ground was taken to face the camera, stood up in front of itself, and was darkened out to some seventy
     /// metres, in a straight line across the picture (seen first in a film of a crash on the runway, 2026-10-17). So on each
     /// camera that keeps that picture, once it is made, the ground's facing is worked out from the depths and put in
-    /// (tools/shaderpack/dnfill.glsl, in GameData/Keystone/PluginData/dnfill.bundle). The other kind, with compute shaders
-    /// (Windows), reads depths alone and needs none of this.
+    /// (tools/shaderpack/dnfill.glsl, in GameData/Keystone/PluginData/dnfill.bundle). The other kind, on Direct3D, reads depths
+    /// alone and needs none of this.
     /// </summary>
     static class GroundFacing
     {
@@ -315,7 +346,7 @@ namespace KeystoneTUFX
                 if (bundle == null) return false;
                 foreach (Shader one in bundle.LoadAllAssets<Shader>()) if (one != null && one.isSupported) shader = one;
                 bundle.Unload(false);
-                if (shader != null) Kit.Log("Keystone", "the ground's facing is put in for the darkening of creases (no compute shaders here)");
+                if (shader != null) Kit.Log("Keystone", "the ground's facing is put in for the darkening of creases");
             }
             catch (System.Exception ex) { shader = null; Kit.Log("Keystone", "the ground's facing could not be put in for the darkening of creases: " + ex.Message); }
             return shader != null;

@@ -583,6 +583,9 @@ namespace Keystone
             foreach (Listed one in list) foreach (string name in one.Names) if (!names.ContainsKey(name)) names[name] = one;
             foreach (Listed one in list)
             {
+                // (a need its own libraries answer is none: Warm Start's companion for Harmony needs Warm Start, in the same folder,
+                // and the mod was listed as needing itself)
+                one.Needs.RemoveAll(n => Array.Exists(n.Name.Split('|'), one.Names.Contains));
                 foreach (Need need in one.Needs)
                 {
                     foreach (string name in need.Name.Split('|'))

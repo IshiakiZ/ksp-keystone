@@ -265,6 +265,35 @@ namespace Keystone
         /// </summary>
         public static event Action<WeatherFlash> Flashed;
 
+        /// <summary>
+        /// The clouds' own light as a mod that draws them (Natural Weather) has them in the camera's sight just now: their light
+        /// (as light, in the game's own measure, the sun on a white surface facing it about 1), by as much as they hide, over the
+        /// sky in sight between six and thirty-five degrees above level; how much of that sky they hide (0 to 1); and when it was
+        /// last said (Time.unscaledTime; ten seconds old or more, there is none to take). For what lights the air under them: the
+        /// haze, rain and fog under an overcast are lit by the deck over them and the ground under them, not by a sky that is not
+        /// there.
+        /// </summary>
+        public static Color CloudLight;
+        /// <summary>How much of the sky in sight the clouds hide, 0 to 1 (see CloudLight).</summary>
+        public static float CloudLightCover;
+        /// <summary>When CloudLight was last said (Time.unscaledTime).</summary>
+        public static float CloudLightAt = -1e9f;
+
+        /// <summary>
+        /// A lightning flash's light on the scene at this moment, as the weather mod that makes the flash lights the scene with
+        /// it (as light, in the game's own measure, the sun on a white surface facing it about 1; black between flashes), said
+        /// afresh every frame. For what lights a place the scene's own cameras do not draw: the inside of a cockpit, lit through
+        /// its windows by the light outside. (After Keystone 0.10.0, as CloudLight: a mod that asks for an older Keystone reads
+        /// and writes these in a guarded method of its own.)
+        /// </summary>
+        public static Color FlashLight;
+        /// <summary>The way FlashLight comes from: a unit vector in the scene's frame, towards the flash.</summary>
+        public static Vector3 FlashLightFrom = Vector3.up;
+        /// <summary>How much of FlashLight comes from all round as well (the sky and the ground a flash lights up), 0 to 1.</summary>
+        public static float FlashLightRound;
+        /// <summary>The frame FlashLight was said in (Time.frameCount): in any other frame there is none to take.</summary>
+        public static int FlashLightFrame = -1;
+
         /// <summary>The flashes of the last half minute, oldest first.</summary>
         public static IList<WeatherFlash> Recent => recent;
         static readonly List<WeatherFlash> recent = new List<WeatherFlash>();

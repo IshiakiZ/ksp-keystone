@@ -36,6 +36,11 @@ namespace Keystone
         static ReadyFn ready;
         static IntPtr eventFn;
         static readonly bool[] slotsTaken = new bool[8];
+        // (how many reads each of the library's places has been asked for in all, this game: the library numbers its answers so,
+        // and never starts again. A read that took a place another had used counted its own from nothing, and asked under 1, 2,
+        // 3 had its answers back numbered thousands on: none matched, and nothing it was handed came back with an answer. The
+        // clouds' meter, after any flight but a game's first, on OpenGL; found by review, 2026-10-25.)
+        static readonly long[] slotAsked = new long[8];
         static int usingLibrary;
         static Pump pump;
 
@@ -105,7 +110,7 @@ namespace Keystone
         Texture2D atOnce;
         RenderTexture namedFor;
         uint name;
-        long asked, taken;
+        long asked, taken, first;
         int errors;
         bool fresh, waiting;
         object takenTag;
@@ -124,6 +129,7 @@ namespace Keystone
                 if (slot >= 0)
                 {
                     way = 2;
+                    asked = taken = first = slotAsked[slot];
                     room = Marshal.AllocHGlobal(bytes.Length);
                     usingLibrary++;
                     if (pump == null) { var holder = new GameObject("Keystone read-back"); UnityEngine.Object.DontDestroyOnLoad(holder); pump = holder.AddComponent<Pump>(); }
@@ -175,6 +181,7 @@ namespace Keystone
                 // (the texture's name on the card, asked of Unity only when the picture is another: asking waits for the render thread)
                 if (picture != namedFor) { name = (uint)picture.GetNativeTexturePtr().ToInt64(); namedFor = picture; }
                 long n = ++asked;
+                slotAsked[slot] = asked;
                 tags[n] = tag;
                 if (tags.Count > 16) { var old = new List<long>(); foreach (long k in tags.Keys) if (k < n - 12) old.Add(k); foreach (long k in old) tags.Remove(k); }
                 request(slot, name, x, y, w, h, floats ? 1 : 0);
@@ -207,7 +214,7 @@ namespace Keystone
                     tags.TryGetValue(n, out takenTag);
                     fresh = true;
                 }
-                else if (taken == 0 && (asked > 90 || ready() < 0))
+                else if (taken == first && (asked - first > 90 || ready() < 0))
                 {
                     // (nothing has ever come back: the library could not read on this card; read at once from here on)
                     Kit.Log("Keystone", "a picture is read back at once after all: Volumetric Explosions' library " + (ready() < 0 ? "found no OpenGL" : "never answered"));

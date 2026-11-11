@@ -19,8 +19,10 @@ namespace Keystone
         public int blur;
         /// <summary>The part of each frame the shutter is open for, 0 (nothing smears) to 1.</summary>
         public float open;
-        /// <summary>How grainy the film is, 0 to 1.</summary>
+        /// <summary>How grainy the film or sensor is in the middle tones, 0 to 1: at 1 very grainy (some 18 levels of 255), a cinema camera at its own base ISO about 0.05.</summary>
         public float grain;
+        /// <summary>How much grainier the shadows are than the middle tones: the sensor's own noise against the light's own, in the middle tones (a cinema camera at its base ISO about 0.3, more at a faster film speed). 0: no grainier.</summary>
+        public float grainDark;
         /// <summary>The lens's own marks, each 0 (none) to 1: darker corners, colours parting towards the corners, and the bend of a wide lens.</summary>
         public float corners, fringe, bend;
     }
@@ -211,8 +213,13 @@ namespace Keystone
             // ---- the shutter, the lens's own marks and the film
             finishing.SetVector("_LensMove", new Vector4(moving ? Mathf.Clamp01(look.open) : 0f, 10f, 0.06f, depth ? 1f : 0f));
             float bent = 0.28f * Mathf.Clamp01(look.bend);
-            finishing.SetVector("_LensMarks", new Vector4(0.55f * Mathf.Clamp01(look.corners), 0.012f * Mathf.Clamp01(look.fringe), bent, 0.38f * Mathf.Clamp01(look.grain)));
-            finishing.SetVector("_LensFrame", new Vector4(Time.frameCount % 977, wide / (float)high, Mathf.Max(1f, (1f + 0.8f * Mathf.Clamp01(look.grain)) * high / 1080f), 0f));
+            // (The grain a pixel fine, as a sensor's noise is, and as strong seen whole at any size of picture: a picture of more
+            // pixels is noisier pixel by pixel, as a camera's is that writes more of them from the same sensor. Until 2026-11-08 it
+            // was drawn in square blocks that grew with it, a pixel and a half across at 1080 high at a cinema camera's base ISO.
+            // How much grainier the shadows are goes in w, which a shader packed before then does not read.)
+            float grain = 0.38f * Mathf.Clamp01(look.grain) * Mathf.Clamp(high / 1080f, 0.5f, 3f);
+            finishing.SetVector("_LensMarks", new Vector4(0.55f * Mathf.Clamp01(look.corners), 0.012f * Mathf.Clamp01(look.fringe), bent, grain));
+            finishing.SetVector("_LensFrame", new Vector4(Time.frameCount % 977, wide / (float)high, 1f, Mathf.Clamp(look.grainDark, 0f, 4f)));
 
             // What the shader reads of the game's own: how far off each pixel is, and how far it has moved since the last frame.
             DepthTextureMode wanted = (depth ? DepthTextureMode.Depth : DepthTextureMode.None) | (moving ? DepthTextureMode.MotionVectors | DepthTextureMode.Depth : DepthTextureMode.None);

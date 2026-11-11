@@ -352,6 +352,8 @@ namespace Keystone
                 if (shown != null && shown != CostsPage && shown != KeysPage && !Listing.All.Contains(shown)) shown = Find(shown.Id);
                 filter = filterWanted;
                 search = searchTyped;
+                // (the page's view changed only between one drawing and the next, as the page itself is)
+                if (viewWanted >= 0) { Kit.AdvancedShown.Value = viewWanted == 1; viewWanted = -1; }
                 float high = Screen.height / UiScale;
                 room = Mathf.Max(110f, Mathf.Min(tall > 0f ? tall : high * 0.62f, high - 12f - chrome));
             }
@@ -516,18 +518,27 @@ namespace Keystone
             foreach (Listed one in all) if (one.Behind) anyNewer = true;
             GUILayout.BeginHorizontal();
             SearchBox();
-            GUILayout.FlexibleSpace();
-            string[] filters = anyNewer ? new[] { "All", "With settings", "Newer" } : new[] { "All", "With settings" };
+            GUILayout.Space(4f);
+            // (whether there is a filter for newer versions is settled in the frame's layout, the same in its every event: the filters
+            // are a button each, and a newer version learnt between two events would make one more control than was laid out)
+            if (Event.current.type == EventType.Layout) newerShown = anyNewer;
+            string[] filters = newerShown ? new[] { "All", "With settings", "Newer" } : new[] { "All", "With settings" };
             // (no newer versions any more: the filter for them goes, and the list is the whole list again)
             if (filter >= filters.Length) filterWanted = 0;
-            int chosen = GUILayout.Toolbar(Mathf.Min(filter, filters.Length - 1), filters, GUILayout.Width(anyNewer ? 250f : 190f));
-            if (chosen != Mathf.Min(filter, filters.Length - 1)) filterWanted = chosen;
+            // (each filter as wide as its name: in a toolbar of equal parts "With settings" was cut short, 2026-11-06)
+            int at = Mathf.Min(filter, filters.Length - 1);
+            for (int n = 0; n < filters.Length; n++)
+                if (GUILayout.Toggle(n == at, filters[n], GUI.skin.button, GUILayout.Width(Wide(filters[n]))) && n != at) filterWanted = n;
+            // (since 0.11.0: the page of every key at the head of the list, where it is seen; it was a small button at the foot,
+            // and the owner asked for the keys "in the Keystone menu", 2026-11-06)
+            GUILayout.Space(4f);
+            if (GUILayout.Button(new GUIContent("Keys", "Every key of every mod in one list: what each does, and where one is also another mod's or the game's own."), GUILayout.Width(Wide("Keys")))) Go(KeysPage);
             GUILayout.EndHorizontal();
             GUILayout.Label("<size=11><color=#9a9a9a>" + Listing.Game + "</color></size>", Rich);
 
             List<Listed> showing = Showing();
             if (Event.current.type == EventType.Layout) listScrolls = listHigh > room + 1f;
-            if (listScrolls) listScroll = GUILayout.BeginScrollView(listScroll, false, true, GUILayout.Height(room));
+            if (listScrolls) listScroll = GUILayout.BeginScrollView(listScroll, false, true, GUIStyle.none, GUI.skin.verticalScrollbar, GUILayout.Height(room));
             GUILayout.BeginVertical();
             bool ours = false, theirs = false;
             foreach (Listed one in showing)
@@ -545,6 +556,11 @@ namespace Keystone
             OnlineLine();
         }
 
+        bool newerShown;
+
+        /// <summary>A button just wide enough for its words.</summary>
+        static float Wide(string words) => Mathf.Ceil(GUI.skin.button.CalcSize(new GUIContent(words)).x) + 6f;
+
         static void Heading(string words, string hint)
         {
             GUILayout.Label(new GUIContent("<b>" + words + "</b>", hint), Line);
@@ -556,7 +572,7 @@ namespace Keystone
             Event e = Event.current;
             if (had && e.type == EventType.KeyDown && e.keyCode == KeyCode.Escape) { searchTyped = ""; GUIUtility.keyboardControl = 0; e.Use(); }
             GUI.SetNextControlName(SearchName);
-            searchTyped = GUILayout.TextField(searchTyped, 40, GUILayout.Width(160f));
+            searchTyped = GUILayout.TextField(searchTyped, 40, GUILayout.MinWidth(60f), GUILayout.MaxWidth(160f), GUILayout.ExpandWidth(true));
             if (searchTyped.Length == 0 && !had && e.type == EventType.Repaint)
             {
                 Rect at = GUILayoutUtility.GetLastRect();
@@ -674,7 +690,6 @@ namespace Keystone
         {
             GUILayout.BeginHorizontal();
             if (GUILayout.Button(new GUIContent("What each mod costs", "How much of each frame every mod takes, and what each loaded from its folder."), GUILayout.Width(160f))) Go(CostsPage);
-            if (GUILayout.Button(new GUIContent("Keys", "Every key of every mod in one list, and where one is also another mod's, or the game's own."), GUILayout.Width(60f))) Go(KeysPage);
             IMeter meter = Meter.Best;
             if (meter != null && meter.Running)
             {
@@ -719,7 +734,7 @@ namespace Keystone
             GUILayout.EndHorizontal();
             GUILayout.Space(4f);
             if (Event.current.type == EventType.Layout) pageScrolls = pageHigh > room + 1f;
-            if (pageScrolls) pageScroll = GUILayout.BeginScrollView(pageScroll, false, true, GUILayout.Height(room));
+            if (pageScrolls) pageScroll = GUILayout.BeginScrollView(pageScroll, false, true, GUIStyle.none, GUI.skin.verticalScrollbar, GUILayout.Height(room));
             GUILayout.BeginVertical();
             var culture = System.Globalization.CultureInfo.InvariantCulture;
 
@@ -787,51 +802,74 @@ namespace Keystone
             GUILayout.Space(6f);
             GUILayout.Label("<b>Every mod's keys</b>", Title, GUILayout.ExpandWidth(true));
             GUILayout.EndHorizontal();
-            GUILayout.Space(4f);
-            if (Event.current.type == EventType.Layout) pageScrolls = pageHigh > room + 1f;
-            if (pageScrolls) pageScroll = GUILayout.BeginScrollView(pageScroll, false, true, GUILayout.Height(room));
-            GUILayout.BeginVertical();
-            int count = 0, clashes = 0;
+            // (since 0.11.0: what is said of them all at the head, not the foot, and the keys under each mod's name, 2026-11-06)
+            keyRows.Clear();
+            int clashes = 0;
             foreach (Mod mod in Kit.All())
             {
                 foreach (Setting setting in mod.Settings)
                 {
                     if (!(setting is Hotkey key)) continue;
-                    count++;
                     string clash = key.Clash() ?? key.GameClash();
                     if (clash != null) clashes++;
-                    KeyRow(mod, key.Shown, key.Label, clash, key.Hint ?? "");
+                    keyRows.Add(new KeyLine { Mod = mod, Shown = key.Code == KeyCode.None ? "no key" : key.Shown, Does = key.Label, Clash = clash, Hint = (key.Hint ?? "") + " Its key can be changed on " + mod.Name + "'s page.", Settable = true });
                 }
                 // (and the keys it reads by itself, not settings: listed and checked the same, but changed only in the mod, if at all)
                 List<Mod.FixedKey> keys = mod.FixedKeys;
                 for (int n = 0; n < keys.Count; n++)
                 {
-                    count++;
                     string clash = Hotkey.Clash(keys[n].Code, keys[n].Modifier, mod, null, n) ?? Hotkey.GameClash(keys[n].Code, keys[n].Modifier);
                     if (clash != null) clashes++;
-                    KeyRow(mod, Hotkey.Spoken(keys[n].Code, keys[n].Modifier), keys[n].Does, clash, "A key " + mod.Name + " reads by itself: it cannot be changed here.");
+                    keyRows.Add(new KeyLine { Mod = mod, Shown = Hotkey.Spoken(keys[n].Code, keys[n].Modifier), Does = keys[n].Does, Clash = clash, Hint = "A key " + mod.Name + " reads by itself: it cannot be changed here." });
                 }
             }
-            GUILayout.Label(count == 0 ? "No mod has a key of its own." : count + (count == 1 ? " key" : " keys") + (clashes == 0 ? ", none the same as another's or the game's." : ", " + clashes + " the same as another's or the game's: a click goes to the mod, where it can be changed."), Small);
+            int count = keyRows.Count;
+            GUILayout.Label(count == 0 ? "No mod has a key of its own." : count + (count == 1 ? " key" : " keys") + (clashes == 0 ? ", none the same as another's or the game's." : ", <color=#e0a040>" + clashes + " the same as another's or the game's</color>: a click goes to the mod, where it can be changed."), Small);
+            GUILayout.Label("<color=#9a9a9a>" + Safe(Hotkey.ModifierName) + " is the game's modifier key: a key with it is pressed with it held. It is set in the game's settings (Input, \"Modifier key\"). A key in brackets is a setting, changed on its mod's page.</color>", Small);
+            GUILayout.Space(4f);
+            if (Event.current.type == EventType.Layout) pageScrolls = pageHigh > room + 1f;
+            if (pageScrolls) pageScroll = GUILayout.BeginScrollView(pageScroll, false, true, GUIStyle.none, GUI.skin.verticalScrollbar, GUILayout.Height(room));
+            GUILayout.BeginVertical();
+            Mod under = null;
+            foreach (KeyLine one in keyRows)
+            {
+                if (one.Mod != under)
+                {
+                    if (under != null) GUILayout.Space(4f);
+                    under = one.Mod;
+                    Heading(Safe(under.Name), "Click a key to go to " + under.Name + "'s page.");
+                }
+                KeyRow(one);
+            }
             GUILayout.EndVertical();
             if (Event.current.type == EventType.Repaint) pageHigh = GUILayoutUtility.GetLastRect().height;
             if (pageScrolls) GUILayout.EndScrollView();
             if (Event.current.type == EventType.Repaint) partShown = GUILayoutUtility.GetLastRect().height;
         }
 
-        /// <summary>One key on the page of every key: a click goes to its mod's page.</summary>
-        void KeyRow(Mod mod, string shown, string does, string clash, string hint)
+        struct KeyLine { public Mod Mod; public string Shown, Does, Clash, Hint; public bool Settable; }
+        readonly List<KeyLine> keyRows = new List<KeyLine>();
+
+        /// <summary>One key on the page of every key, its name in brackets when it is a setting (changed on the mod's page): a click
+        /// goes to its mod's page.</summary>
+        void KeyRow(KeyLine one)
         {
             var line = new StringBuilder();
-            line.Append("<b>").Append(Safe(shown)).Append("</b>  ").Append(Safe(does)).Append("  <size=11><color=#a8b0b8>").Append(Safe(mod.Name)).Append("</color></size>");
-            if (clash != null) line.Append("\n<size=11><color=#e0a040>also ").Append(Safe(clash)).Append("</color></size>");
-            if (GUILayout.Button(new GUIContent(line.ToString(), hint), RowStyle, GUILayout.ExpandWidth(true)))
+            line.Append(Safe(one.Does));
+            if (one.Clash != null) line.Append("\n<size=11><color=#e0a040>also ").Append(Safe(one.Clash)).Append("</color></size>");
+            GUILayout.BeginHorizontal();
+            string cap = one.Settable ? "<color=#ffe08a>[" + Safe(one.Shown) + "]</color>" : "<b>" + Safe(one.Shown) + "</b>";
+            bool clicked = GUILayout.Button(new GUIContent(cap, one.Hint), RowStyle, GUILayout.Width(KeyCapWide));
+            clicked |= GUILayout.Button(new GUIContent(line.ToString(), one.Hint), RowStyle, GUILayout.ExpandWidth(true));
+            GUILayout.EndHorizontal();
+            if (clicked)
             {
                 Listed at = null;
-                foreach (Listed one in Listing.All) if (one.Mod == mod || (mod == Kit.Own && one.Base)) { at = one; break; }
+                foreach (Listed listed in Listing.All) if (listed.Mod == one.Mod || (one.Mod == Kit.Own && listed.Base)) { at = listed; break; }
                 if (at != null) Go(at);
             }
         }
+        const float KeyCapWide = 128f;
 
         // ---------------------------------------------------------------- a mod's page
 
@@ -857,15 +895,43 @@ namespace Keystone
 
             // The page is as tall as what is on it; only one too tall for the screen is given a bar to scroll by.
             if (Event.current.type == EventType.Layout) pageScrolls = pageHigh > room + 1f;
-            if (pageScrolls) pageScroll = GUILayout.BeginScrollView(pageScroll, false, true, GUILayout.Height(room));
+            if (pageScrolls) pageScroll = GUILayout.BeginScrollView(pageScroll, false, true, GUIStyle.none, GUI.skin.verticalScrollbar, GUILayout.Height(room));
             GUILayout.BeginVertical();
             if (mod != null)
             {
+                // (since 0.11.0) A mod with fine details has a switch at its head: the settings most worth knowing, or every one. A
+                // search shows what it found of them in either.
+                int fine = mod.FineCount;
+                bool every = Kit.AdvancedShown.Value;
+                if (fine > 0)
+                {
+                    int was = every ? 1 : 0, now = GUILayout.Toolbar(was, Views, GUILayout.Width(180f));
+                    if (now != was) viewWanted = now;
+                }
+                string looked = search.Trim();
+                List<Setting> sought = fine > 0 && !every && looked.Length > 0 ? new List<Setting>(SettingsMatching(one, looked)) : null;
+                int hidden = 0;
                 for (int n = 0; n < mod.Settings.Count; n++)
                 {
-                    try { mod.Settings[n].Draw(); }
+                    Setting setting = mod.Settings[n];
+                    if (setting.Fine && !every && (sought == null || !sought.Contains(setting))) { if (setting.Key != null) hidden++; continue; }
+                    try { setting.Draw(); }
                     catch (ExitGUIException) { throw; }
-                    catch (Exception ex) { GUILayout.Label(mod.Settings[n].Label + ": " + ex.Message); }
+                    catch (Exception ex) { GUILayout.Label(setting.Label + ": " + ex.Message); }
+                }
+                if (hidden > 0) GUILayout.Label("<color=#9a9a9a>" + hidden + (hidden == 1 ? " more setting" : " more settings") + ", finer details, in Advanced at the head of the page.</color>", Small);
+                // (since 0.11.0) The keys the mod reads by itself, which are not settings and so were on no page but the page of every
+                // key: Alt+N was not on Kerbal News's page but in its words at the top, 2026-11-06.
+                List<Mod.FixedKey> fixedKeys = mod.FixedKeys;
+                if (fixedKeys.Count > 0)
+                {
+                    GUILayout.Space(4f);
+                    GUILayout.Label(new GUIContent("<b>Keys</b>", "Keys " + mod.Name + " reads by itself: they cannot be changed here. Every mod's keys are in one list from the head of the list of mods."), Rich);
+                    for (int n = 0; n < fixedKeys.Count; n++)
+                    {
+                        string clash = Hotkey.Clash(fixedKeys[n].Code, fixedKeys[n].Modifier, mod, null, n) ?? Hotkey.GameClash(fixedKeys[n].Code, fixedKeys[n].Modifier);
+                        GUILayout.Label("<b>" + Safe(Hotkey.Spoken(fixedKeys[n].Code, fixedKeys[n].Modifier)) + "</b>  " + Safe(fixedKeys[n].Does) + (clash != null ? "  <color=#e0a040>also " + Safe(clash) + "</color>" : ""), Small);
+                    }
                 }
                 if (mod.Panel != null)
                 {
@@ -881,6 +947,9 @@ namespace Keystone
             if (pageScrolls) GUILayout.EndScrollView();
             if (Event.current.type == EventType.Repaint) partShown = GUILayoutUtility.GetLastRect().height;
         }
+
+        static readonly GUIContent[] Views = { new GUIContent("Simple", "The settings most worth knowing."), new GUIContent("Advanced", "Every setting, down to the finest details. The same for every mod's page.") };
+        int viewWanted = -1;
 
         static string Ago(DateTime at)
         {
@@ -1046,6 +1115,13 @@ namespace Keystone
             string text = (Instance.open ? "open" : "closed") + ", button " + (Instance.button != null ? "on the toolbar" : "not made yet") + ", mods:";
             foreach (Mod mod in Kit.Mods) text += " " + mod.Name + " (" + mod.Settings.Count + " settings)";
             return text;
+        }
+
+        /// <summary>(Development build: the pages in their Simple view ("simple") or their Advanced one ("advanced"), as the switch at a page's head; nothing: which.)</summary>
+        public static string View(string v)
+        {
+            if (v == "simple" || v == "advanced") Kit.AdvancedShown.Value = v == "advanced";
+            return Kit.AdvancedShown.Value ? "advanced" : "simple";
         }
 
         /// <summary>For the development build: turn to the next page (from the list, the first mod's).</summary>

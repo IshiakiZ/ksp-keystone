@@ -10,6 +10,8 @@ namespace Keystone
     {
         public readonly string Key, Label, Hint;
         internal Mod Owner;
+        /// <summary>(Since 0.11.0.) A fine detail: on its mod's page only when the window shows every setting (see Mod.Advanced).</summary>
+        internal bool Fine;
 
         /// <summary>The player changed it (or it was put back to what it starts as).</summary>
         public event Action Changed;
@@ -42,6 +44,15 @@ namespace Keystone
 
         protected GUIContent Name => new GUIContent(Label, Hint ?? "");
         protected static readonly CultureInfo Plain = CultureInfo.InvariantCulture;
+
+        /// <summary>A figure as written, refused (thrown) unless it is a finite one: a file or a shared code may say "NaN", which no
+        /// clamp keeps out (it compares false with everything), and which drawn as a colour spreads black through the picture.</summary>
+        protected static float Finite(string text)
+        {
+            float v = float.Parse(text, Plain);
+            if (float.IsNaN(v) || float.IsInfinity(v)) throw new FormatException("not a finite figure: " + text);
+            return v;
+        }
     }
 
     public sealed class Toggle : Setting
@@ -98,7 +109,7 @@ namespace Keystone
 
         public static implicit operator float(Slider slider) => slider.value;
 
-        internal override void Read(string text) => value = Mathf.Clamp(float.Parse(text, Plain), Least, Most);
+        internal override void Read(string text) => value = Mathf.Clamp(Finite(text), Least, Most);
         internal override string Write() => value.ToString(Plain);
         internal override void Reset() { if (value != first) { value = first; Touch(); } }
         // (as shown: a value read from a file may carry more decimals than the window shows)
@@ -194,7 +205,7 @@ namespace Keystone
         internal override void Read(string text)
         {
             string[] parts = text.Split(',');
-            value = new Color(float.Parse(parts[0], Plain), float.Parse(parts[1], Plain), float.Parse(parts[2], Plain), parts.Length > 3 ? float.Parse(parts[3], Plain) : 1f);
+            value = new Color(Finite(parts[0]), Finite(parts[1]), Finite(parts[2]), parts.Length > 3 ? Finite(parts[3]) : 1f);
         }
 
         internal override string Write() => value.r.ToString("F3", Plain) + "," + value.g.ToString("F3", Plain) + "," + value.b.ToString("F3", Plain) + "," + value.a.ToString("F3", Plain);

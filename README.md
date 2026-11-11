@@ -19,6 +19,12 @@ Copy the `Keystone` folder from the download into your KSP's `GameData`. One cop
 * **Settings are kept** in `GameData/Keystone/PluginData/<mod>.cfg`. Deleting a file there puts that mod back as
   installed. On Keystone's own page every mod's settings can be **kept as a set** under a name and put back later (to
   try a look, or to give one to a friend: the files are in `PluginData/Sets/`).
+* **Simple and Advanced** (0.11.0): a mod with fine details among its settings shows the ones most worth knowing, or,
+  with Advanced at the head of its page, every one (Natural Weather's: how much rain gathers on the camera's glass, how
+  big its drops are, how fast it dries, and more).
+* **Share your settings** (0.11.0): Keystone's page makes a code of every mod's settings to paste to a friend. Pasting
+  one says what it would change first, and names any mod it needs that is not installed, with a button to its GitHub
+  page; using it keeps your own settings first, as a set.
 * **Keys:** a page with every mod's keys in one list, and any that are the same as another mod's or the game's.
 * **What each mod costs:** a page that times every mod's work (it needs the Harmony mod).
 * **Newer versions** are looked for on each mod's GitHub page about once a day (a switch turns it off). A mod with a

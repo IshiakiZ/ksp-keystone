@@ -25,14 +25,14 @@ void main()
 // 2. The finished picture. The sharp picture with the blurred one put in where it counts; smeared along the
 //    way each thing has moved while the shutter was open (the game says how far each pixel has moved since
 //    the last frame); bent as a wide lens bends it, its colours parted a little towards the corners, its
-//    corners darker; and grainy as fast film is.
+//    corners darker; and as grainy as the camera's sensor is.
 uniform vec4 _ZBufferParams;
 uniform vec4 _LensStage;     // x: 1 for the first of those, 2 for the second
 uniform vec4 _LensSize;      // xy: one pixel of the picture, as a part of it; zw: how many pixels wide and high it is
 uniform vec4 _LensFocus;     // x: the distance in focus, in metres, y: how wide, in pixels, the disc of something infinitely far off is across its half, z: the widest a disc is drawn (the same measure), w: how much further out each look is than the last (see the loop)
 uniform vec4 _LensMove;      // x: the part of a frame the shutter is open for (0: no smear), y: how many looks along the way, z: the furthest something is smeared, as a part of the picture, w: 1 if there is a blurred picture to put in
-uniform vec4 _LensMarks;     // x: how much darker the corners are, y: how far the colours part, z: how much the picture is bent, w: how grainy it is
-uniform vec4 _LensFrame;     // x: a number that is different in every frame, y: the picture's width over its height, z: how large a grain is, in pixels
+uniform vec4 _LensMarks;     // x: how much darker the corners are, y: how far the colours part, z: how much the picture is bent, w: how grainy it is in the middle tones
+uniform vec4 _LensFrame;     // x: a number that is different in every frame, y: the picture's width over its height, z: how large a grain is, in pixels, w: how much grainier the shadows are (the sensor's own noise against the light's own, in the middle tones)
 uniform sampler2D _LensScene;   // the picture as the game drew it
 uniform sampler2D _LensBlur;    // rgb: the picture out of focus (half size), a: how much of it goes into the finished picture
 uniform sampler2D _CameraMotionVectorsTexture;
@@ -132,13 +132,20 @@ void main()
     float dark = 1.0 + _LensMarks.x * off;
     colour /= dark * dark;
 
-    // Grain: fast film is made of bigger crystals, and they show most in the middle tones.
+    // Grain: a camera sensor's noise, new in every frame (2026-11-08). In the finished picture, through the camera's curve to
+    // Rec.709, the light's own noise is about as strong from the shadows to the middle tones; the sensor's own (_LensFrame.w,
+    // against the light's in the middle tones) the stronger the darker, as far as where the curve runs straight near black;
+    // the highlights, rolled off by the curve, have less and less of it from 0.7, white none, and black none either. In the
+    // middle tones as much as before for the same _LensMarks.w. (Until then it went as film's, with how bright each pixel was:
+    // white in the sun glittered, and the shadows were nearly clean.)
     if (_LensMarks.w > 0.0)
     {
         vec2 crystal = floor(gl_FragCoord.xy / _LensFrame.z);
         float speck = chance(crystal + _LensFrame.x * 3.17) + chance(crystal * 1.37 + _LensFrame.x * 5.71 + 19.0) - 1.0;
         float light = clamp(dot(colour, vec3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
-        colour += colour * speck * _LensMarks.w * (1.4 - light) + vec3(speck * _LensMarks.w * 0.02);
+        float sensor = _LensFrame.w * pow(max(light, 0.08) / 0.45, -1.2);
+        float much = sqrt(1.0 + sensor * sensor) * (1.0 - smoothstep(0.7, 1.0, light)) * smoothstep(0.0, 0.05, light);
+        colour += vec3(speck * _LensMarks.w * 0.45 * much);
     }
     SV_Target0 = vec4(max(colour, 0.0), 1.0);
 }
