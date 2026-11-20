@@ -21,7 +21,7 @@ namespace Keystone
         public double Elsewhere;
     }
 
-    /// <summary>Something that can measure what each mod costs (see KeystoneHarmony, the companion that does it where the Harmony mod is installed).</summary>
+    /// <summary>Something that can measure what each mod costs (see KeystoneCosts, the companion that does it where the Harmony mod is installed).</summary>
     public interface IMeter
     {
         string Name { get; }
@@ -47,7 +47,7 @@ namespace Keystone
 
     /// <summary>
     /// What each mod costs. Measuring needs a way to time every mod's own methods as the game calls them, which needs the
-    /// Harmony mod: Keystone's companion for it (KeystoneHarmony.dll, loaded by the game only where Harmony is
+    /// Harmony mod: Keystone's companion for it (KeystoneCosts.dll, loaded by the game only where Harmony is
     /// installed) fills in Other. Measuring is off until the player switches it on, and stops when the window closes.
     ///
     /// What each mod loaded through the game from its own folder (pictures, models, sounds) needs nothing: see Loaded.

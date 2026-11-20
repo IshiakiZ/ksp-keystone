@@ -9,7 +9,7 @@ using System.Threading;
 using HarmonyLib;
 using UnityEngine;
 
-namespace KeystoneHarmony
+namespace KeystoneCosts
 {
     /// <summary>
     /// (Development: a tracer, for finding what a stall of the game is made of (2026-10-18). Every method of what is named is
@@ -132,7 +132,7 @@ namespace KeystoneHarmony
 
         static void Methods(Type t, List<MethodBase> found, int least)
         {
-            if (t.ContainsGenericParameters || t.Namespace == "KeystoneHarmony" || t.Assembly == typeof(Harmony).Assembly) return;
+            if (t.ContainsGenericParameters || t.Namespace == "KeystoneCosts" || t.Namespace == HarmonyAtStart.OldName || t.Assembly == typeof(Harmony).Assembly) return;
             const BindingFlags Own = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
             var list = new List<MethodBase>();
             try { list.AddRange(t.GetMethods(Own)); list.AddRange(t.GetConstructors(Own)); } catch (Exception) { return; }

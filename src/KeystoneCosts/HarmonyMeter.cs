@@ -9,12 +9,12 @@ using Keystone;
 using UnityEngine;
 
 #if !DEV
-[assembly: KSPAssembly("KeystoneHarmony", 0, 1)]
+[assembly: KSPAssembly("KeystoneCosts", 0, 1)]
 [assembly: KSPAssemblyDependency("Keystone", 0, 6)]
 [assembly: KSPAssemblyDependency("HarmonyKSP", 1, 0)]
 #endif
 
-namespace KeystoneHarmony
+namespace KeystoneCosts
 {
     /// <summary>
     /// Keystone's companion for the Harmony mod: it measures what each mod costs the game's main thread, for the window's
@@ -31,12 +31,43 @@ namespace KeystoneHarmony
     [KSPAddon(KSPAddon.Startup.Instantly, true)]
     public sealed class HarmonyAtStart : MonoBehaviour
     {
+        // (This library was KeystoneHarmony.dll until 2026-11-20, a name CKAN takes for a copy of Harmony itself: its check
+        // refuses any library with "Harmony" in its name that does not say it provides Harmony. Where a player updated by
+        // hand over an older Keystone, that file is still there and the game loads both. The old one offers its meter as the
+        // game starts its libraries; this one waits a frame and offers its own after it, so that this one is used, and says
+        // in the log which file to delete.)
+        internal const string OldName = "KeystoneHarmony";
+        bool waiting;
+
+        internal static bool OldCopyLoaded()
+        {
+            foreach (AssemblyLoader.LoadedAssembly a in AssemblyLoader.loadedAssemblies) if (a != null && a.name == OldName) return true;
+            return false;
+        }
+
         void Awake()
+        {
+            if (OldCopyLoaded())
+            {
+                Kit.Log("Keystone", "an old copy of Keystone's companion, " + OldName + ".dll, is in GameData/Keystone beside KeystoneCosts.dll, which takes its place: please delete " + OldName + ".dll");
+                waiting = true;
+                return;
+            }
+            Offer();
+        }
+
+        void Start()
+        {
+            if (waiting) Offer();
+        }
+
+        void Offer()
         {
             // (a development build swapping a new copy in: whatever an old copy left wrapped, and its runner, go first)
             try { new Harmony(HarmonyMeter.Id).UnpatchAll(HarmonyMeter.Id); } catch (Exception) { }
             foreach (GameObject left in FindObjectsOfType<GameObject>()) if (left != null && left.name == HarmonyMeter.RunnerName) Destroy(left);
             if (!(Meter.Other is HarmonyMeter)) Meter.Other = new HarmonyMeter();
+            waiting = false;
             Destroy(gameObject);
         }
     }
@@ -274,7 +305,7 @@ namespace KeystoneHarmony
         }
 
         /// <summary>This companion's own code, which is never timed (it is what does the timing).</summary>
-        static bool Ours(Type t) => t != null && (t.Namespace == "KeystoneHarmony" || t.Assembly == typeof(Harmony).Assembly);
+        static bool Ours(Type t) => t != null && (t.Namespace == "KeystoneCosts" || t.Namespace == HarmonyAtStart.OldName || t.Assembly == typeof(Harmony).Assembly);
 
         static Type[] TypesOf(Assembly a)
         {

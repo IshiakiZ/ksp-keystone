@@ -11,6 +11,8 @@ INSTALL
   Copy the Keystone folder in this download into your KSP's GameData folder. One
   copy serves every mod that uses it. (Those mods' own downloads do not carry it: each links here.)
   The page of what each mod costs needs the Harmony mod (HarmonyKSP); without it, the rest works.
+  Updating by hand over an older Keystone: delete KeystoneHarmony.dll from GameData/Keystone if
+  it is there. Keystone's companion for Harmony is KeystoneCosts.dll now, and takes its place.
 
 USE
   The keystone button on the game's toolbar, or Option-K on a Mac and Alt-K elsewhere.

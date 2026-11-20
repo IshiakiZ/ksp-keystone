@@ -1,4 +1,4 @@
-namespace KeystoneHarmony
+namespace KeystoneCosts
 {
     // Made by a script: one small class for each slot, each mod having a slot of its own, so that the timing that is
     // put round every measured method knows whose it is without looking anything up (see Clock). 256 since 2026-10-18:

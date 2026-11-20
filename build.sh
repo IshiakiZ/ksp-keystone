@@ -7,8 +7,9 @@
 #   ./build.sh shaders    pack the lens shader again from tools/shaderpack/lens.glsl (after changing it)
 #
 # KeystoneTUFX.dll (the lens done through the TUFX mod, for where Keystone's own shader cannot run) is built
-# only if TUFX is installed in the game, since it is built against it; KeystoneHarmony.dll (what each mod costs,
-# measured through the Harmony mod) only if Harmony is.
+# only if TUFX is installed in the game, since it is built against it; KeystoneCosts.dll (what each mod costs,
+# measured through the Harmony mod) only if Harmony is. (That one was KeystoneHarmony.dll until 2026-11-20: CKAN takes
+# any library with "Harmony" in its name for a copy of Harmony itself.)
 # Needs the .NET SDK (`brew install dotnet`). Override the game location with KSP_DIR=/path/to/KSP.
 set -euo pipefail
 
@@ -26,8 +27,10 @@ build() {  # build <folder to build into>
   cp src/Keystone/Shaders/*.bundle "$into/PluginData/"
   if [ -f "$TUFX" ]; then WITH="$into/Keystone.dll:$TUFX" compile "$into/KeystoneTUFX.dll" "" src/KeystoneTUFX
   else rm -f "$into/KeystoneTUFX.dll"; echo "left out: KeystoneTUFX (TUFX is not installed here to build it against)"; fi
-  if [ -f "$HARMONY" ]; then WITH="$into/Keystone.dll:$HARMONY" compile "$into/KeystoneHarmony.dll" "" src/KeystoneHarmony
-  else rm -f "$into/KeystoneHarmony.dll"; echo "left out: KeystoneHarmony (Harmony is not installed here to build it against)"; fi
+  # (the companion under its old name, from a build here before 2026-11-20, goes: a download must not carry it)
+  rm -f "$into/KeystoneHarmony.dll"
+  if [ -f "$HARMONY" ]; then WITH="$into/Keystone.dll:$HARMONY" compile "$into/KeystoneCosts.dll" "" src/KeystoneCosts
+  else rm -f "$into/KeystoneCosts.dll"; echo "left out: KeystoneCosts (Harmony is not installed here to build it against)"; fi
 }
 
 case "$MODE" in
@@ -46,9 +49,9 @@ case "$MODE" in
     cp "$OUT/Keystone.dll" "$TO/"
     # (its shaders go beside the settings the player has made there, which are left alone)
     cp "$OUT"/PluginData/*.bundle "$TO/PluginData/"
-    rm -f "$TO/KeystoneTUFX.dll" "$TO/KeystoneHarmony.dll"
+    rm -f "$TO/KeystoneTUFX.dll" "$TO/KeystoneCosts.dll" "$TO/KeystoneHarmony.dll"
     [ -f "$OUT/KeystoneTUFX.dll" ] && cp "$OUT/KeystoneTUFX.dll" "$TO/"
-    [ -f "$OUT/KeystoneHarmony.dll" ] && cp "$OUT/KeystoneHarmony.dll" "$TO/"
+    [ -f "$OUT/KeystoneCosts.dll" ] && cp "$OUT/KeystoneCosts.dll" "$TO/"
     echo "ok: Keystone installed to $TO (restart KSP to load it)"
     ;;
   shaders)

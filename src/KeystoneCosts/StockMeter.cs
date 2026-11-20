@@ -8,7 +8,7 @@ using System.Text;
 using HarmonyLib;
 using UnityEngine;
 
-namespace KeystoneHarmony
+namespace KeystoneCosts
 {
     /// <summary>
     /// (Development build, for the performance mod: what the game's own code costs its main thread, method by method.
@@ -16,7 +16,7 @@ namespace KeystoneHarmony
     /// FixedUpdate, LateUpdate, OnGUI, the cameras' ones) of every class the game itself has, the part modules' OnUpdate and
     /// OnFixedUpdate, and its coroutines. Each method's time is its own and what it called (a method inside another timed
     /// one is counted in both: read as "where the time is", not as a sum). Through dev_call:
-    /// KeystoneHarmony.StockMeter.Start, then Report (which takes every wrapper away).)
+    /// KeystoneCosts.StockMeter.Start, then Report (which takes every wrapper away).)
     /// </summary>
     public static class StockMeter
     {
